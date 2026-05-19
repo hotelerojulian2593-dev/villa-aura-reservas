@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Villa Aura — Nueva Reserva</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #F4F4F6;
+      min-height: 100vh;
+      color: #151635;
+    }
+
+    /* HEADER */
+    .header {
+      background: #151635;
+      padding: 20px 24px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-tag {
+      font-size: 9px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #6B6D7A;
+      margin-bottom: 3px;
+    }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: 1px;
+    }
+    .header p {
+      font-size: 11px;
+      color: #6B6D7A;
+      font-weight: 300;
+      margin-top: 2px;
+    }
+
+    /* FORM */
+    .form-wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #6B6D7A;
+      margin-bottom: 6px;
+    }
+    .field label .req {
+      color: #C49A2B;
+      margin-left: 2px;
+    }
+
+    input[type="text"],
+    input[type="tel"],
+    input[type="date"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      background: white;
+      border: 1.5px solid #E0E0E8;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 15px;
+      color: #151635;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #151635;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #BBBBC8;
+    }
+
+    /* FECHA ROW */
+    .fecha-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .fecha-sub {
+      font-size: 10px;
+      color: #6B6D7A;
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    /* HABITACIONES */
+    .hab-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .hab-btn {
+      background: white;
+      border: 1.5px solid #E0E0E8;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hab-btn:active { transform: scale(0.97); }
+    .hab-btn.selected {
+      background: #151635;
+      border-color: #151635;
+      color: white;
+    }
+    .hab-btn .hab-name {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Poppins', sans-serif;
+      display: block;
+    }
+    .hab-btn .hab-cap {
+      font-size: 10px;
+      font-weight: 300;
+      font-family: 'Poppins', sans-serif;
+      opacity: 0.7;
+      display: block;
+      margin-top: 1px;
+    }
+    .hab-btn.fullhouse {
+      grid-column: span 2;
+      border: 1.5px dashed #151635;
+      text-align: center;
+      padding: 12px;
+    }
+    .hab-btn.fullhouse.selected {
+      background: #151635;
+      border-style: solid;
+      color: white;
+    }
+    .hab-btn.fullhouse .hab-name {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* PERSONAS + ANTICIPO ROW */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* ESTADO */
+    .estado-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .estado-btn {
+      background: white;
+      border: 1.5px solid #E0E0E8;
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      text-align: center;
+      font-family: 'Poppins', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      color: #151635;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .estado-btn.selected-confirmado {
+      background: #151635;
+      border-color: #151635;
+      color: white;
+    }
+    .estado-btn.selected-pendiente {
+      background: #C49A2B;
+      border-color: #C49A2B;
+      color: white;
+    }
+
+    /* DIVIDER */
+    .divider {
+      height: 1px;
+      background: #E0E0E8;
+      margin: 20px 0;
+    }
+
+    /* SUBMIT */
+    .btn-submit {
+      width: 100%;
+      background: #151635;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      margin-top: 8px;
+    }
+    .btn-submit:active { opacity: 0.85; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* SUCCESS */
+    .success-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .success-icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+    }
+    .success-screen h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #151635;
+      margin-bottom: 8px;
+    }
+    .success-screen p {
+      font-size: 13px;
+      color: #6B6D7A;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .btn-nueva {
+      background: #151635;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 28px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* ERROR */
+    .error-msg {
+      background: #FEE;
+      border: 1px solid #F5C6C6;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #C0392B;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #BBBBC8;
+      padding: 16px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-tag">Nueva reserva</div>
+  <h1>VILLA AURA</h1>
+  <p>Agua de Dios, Cundinamarca · Confirmar reserva</p>
+</div>
+
+<div id="form-container">
+  <div class="form-wrap">
+
+    <!-- Huésped -->
+    <div class="field">
+      <label>Nombre del huésped <span class="req">*</span></label>
+      <input type="text" id="huesped" placeholder="Nombre completo" autocomplete="name" />
+    </div>
+
+    <!-- Teléfono -->
+    <div class="field">
+      <label>WhatsApp / Teléfono <span class="req">*</span></label>
+      <input type="tel" id="telefono" placeholder="310 000 0000" autocomplete="tel" />
+    </div>
+
+    <!-- Fechas -->
+    <div class="field">
+      <label>Fechas de la reserva <span class="req">*</span></label>
+      <div class="fecha-row">
+        <div>
+          <input type="date" id="fecha-entrada" />
+          <div class="fecha-sub">Llegada</div>
+        </div>
+        <div>
+          <input type="date" id="fecha-salida" />
+          <div class="fecha-sub">Salida</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Habitaciones -->
+    <div class="field">
+      <label>Habitación(es) <span class="req">*</span></label>
+      <div class="hab-grid">
+        <button type="button" class="hab-btn" data-hab="La Rosaura" onclick="toggleHab(this)">
+          <span class="hab-name">La Rosaura</span>
+          <span class="hab-cap">7 personas · AC</span>
+        </button>
+        <button type="button" class="hab-btn" data-hab="La Yaneth" onclick="toggleHab(this)">
+          <span class="hab-name">La Yaneth</span>
+          <span class="hab-cap">5 personas · AC</span>
+        </button>
+        <button type="button" class="hab-btn" data-hab="La Clara" onclick="toggleHab(this)">
+          <span class="hab-name">La Clara</span>
+          <span class="hab-cap">5-6 personas · AC</span>
+        </button>
+        <button type="button" class="hab-btn" data-hab="La Luis" onclick="toggleHab(this)">
+          <span class="hab-name">La Luis</span>
+          <span class="hab-cap">5-6 personas · AC</span>
+        </button>
+        <button type="button" class="hab-btn" data-hab="La Elsa" onclick="toggleHab(this)">
+          <span class="hab-name">La Elsa</span>
+          <span class="hab-cap">5-6 personas · AC</span>
+        </button>
+        <button type="button" class="hab-btn fullhouse" data-hab="FULL HOUSE" onclick="toggleFullHouse(this)">
+          <span class="hab-name">🏠 Full House</span>
+          <span class="hab-cap">Todas las habitaciones</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Personas + Anticipo -->
+    <div class="two-col">
+      <div class="field">
+        <label>Personas <span class="req">*</span></label>
+        <input type="number" id="personas" placeholder="0" min="1" max="60" />
+      </div>
+      <div class="field">
+        <label>Anticipo recibido</label>
+        <input type="number" id="anticipo" placeholder="0" min="0" />
+      </div>
+    </div>
+
+    <!-- Estado -->
+    <div class="field">
+      <label>Estado de la reserva</label>
+      <div class="estado-row">
+        <button type="button" class="estado-btn selected-pendiente" id="btn-pendiente" onclick="setEstado('Anticipo pendiente')">
+          ⚠ Anticipo pendiente
+        </button>
+        <button type="button" class="estado-btn" id="btn-confirmado" onclick="setEstado('Confirmado')">
+          ✓ Confirmado
+        </button>
+      </div>
+    </div>
+
+    <!-- Notas -->
+    <div class="field">
+      <label>Notas adicionales</label>
+      <textarea id="notas" rows="2" placeholder="Extras, solicitudes especiales..."></textarea>
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <button class="btn-submit" id="btn-submit" onclick="guardarReserva()">
+      GUARDAR RESERVA
+    </button>
+
+  </div>
+  <div class="footer">Villa Aura · Sistema de Reservas · Marketing Hotelero</div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div class="success-screen" id="success-screen">
+  <div class="success-icon">✅</div>
+  <h2>¡Reserva registrada!</h2>
+  <p id="success-detail"></p>
+  <button class="btn-nueva" onclick="nuevaReserva()">+ Nueva reserva</button>
+</div>
+
+<script>
+  const WEBHOOK = 'https://primary-production-abbe.up.railway.app/webhook/villa-aura-reservas';
+
+  let habitacionesSeleccionadas = [];
+  let estadoActual = 'Anticipo pendiente';
+
+  function toggleHab(btn) {
+    const hab = btn.dataset.hab;
+    // Si Full House está activo, desactivarlo primero
+    const fh = document.querySelector('.hab-btn.fullhouse');
+    if (fh.classList.contains('selected')) {
+      fh.classList.remove('selected');
+      habitacionesSeleccionadas = [];
+      // Deselect all others too
+      document.querySelectorAll('.hab-btn:not(.fullhouse)').forEach(b => b.classList.remove('selected'));
+    }
+    if (btn.classList.contains('selected')) {
+      btn.classList.remove('selected');
+      habitacionesSeleccionadas = habitacionesSeleccionadas.filter(h => h !== hab);
+    } else {
+      btn.classList.add('selected');
+      habitacionesSeleccionadas.push(hab);
+    }
+  }
+
+  function toggleFullHouse(btn) {
+    const todos = document.querySelectorAll('.hab-btn:not(.fullhouse)');
+    if (btn.classList.contains('selected')) {
+      btn.classList.remove('selected');
+      habitacionesSeleccionadas = [];
+      todos.forEach(b => b.classList.remove('selected'));
+    } else {
+      btn.classList.add('selected');
+      habitacionesSeleccionadas = ['FULL HOUSE'];
+      todos.forEach(b => b.classList.remove('selected'));
+    }
+  }
+
+  function setEstado(estado) {
+    estadoActual = estado;
+    const bp = document.getElementById('btn-pendiente');
+    const bc = document.getElementById('btn-confirmado');
+    bp.className = 'estado-btn' + (estado === 'Anticipo pendiente' ? ' selected-pendiente' : '');
+    bc.className = 'estado-btn' + (estado === 'Confirmado' ? ' selected-confirmado' : '');
+    // Si seleccionan Confirmado y anticipo está en 0, no forzar
+  }
+
+  // Si el anticipo > 0, cambiar estado a Confirmado automáticamente
+  document.getElementById('anticipo').addEventListener('input', function() {
+    if (parseInt(this.value) > 0 && estadoActual === 'Anticipo pendiente') {
+      setEstado('Confirmado');
+    }
+  });
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function hideError() {
+    document.getElementById('error-msg').style.display = 'none';
+  }
+
+  async function guardarReserva() {
+    hideError();
+    const huesped     = document.getElementById('huesped').value.trim();
+    const telefono    = document.getElementById('telefono').value.trim();
+    const fechaEntrada = document.getElementById('fecha-entrada').value;
+    const fechaSalida  = document.getElementById('fecha-salida').value;
+    const personas    = parseInt(document.getElementById('personas').value) || 0;
+    const anticipo    = parseFloat(document.getElementById('anticipo').value) || 0;
+    const notas       = document.getElementById('notas').value.trim();
+
+    // Validaciones
+    if (!huesped)            return showError('El nombre del huésped es requerido.');
+    if (!telefono)           return showError('El teléfono es requerido.');
+    if (!fechaEntrada)       return showError('La fecha de llegada es requerida.');
+    if (!fechaSalida)        return showError('La fecha de salida es requerida.');
+    if (fechaSalida <= fechaEntrada) return showError('La fecha de salida debe ser posterior a la llegada.');
+    if (habitacionesSeleccionadas.length === 0) return showError('Selecciona al menos una habitación.');
+    if (!personas || personas < 1)  return showError('El número de personas es requerido.');
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    const fields = {
+      'Huésped':       huesped,
+      'Teléfono':      telefono,
+      'Fecha entrada': fechaEntrada,
+      'Fecha salida':  fechaSalida,
+      'Habitaciones':  habitacionesSeleccionadas,
+      'Personas':      personas,
+      'Estado':        estadoActual,
+    };
+    if (anticipo > 0) fields['Anticipo COP'] = anticipo;
+    if (notas)        fields['Notas'] = notas;
+
+    try {
+      const res = await fetch(WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields, typecast: true })
+      });
+      const data = await res.json();
+
+      if (data.ok || data.id) {
+        // Éxito
+        document.getElementById('form-container').style.display = 'none';
+        const sc = document.getElementById('success-screen');
+        sc.style.display = 'flex';
+        const hab = habitacionesSeleccionadas.join(' · ');
+        document.getElementById('success-detail').innerHTML =
+          `<strong>${huesped}</strong><br>${hab}<br>${fechaEntrada} → ${fechaSalida}<br>${personas} personas<br><br>El calendario se actualizó automáticamente.`;
+      } else {
+        const err = data.error?.message || JSON.stringify(data);
+        showError('Error al guardar: ' + err);
+        btn.disabled = false;
+        btn.textContent = 'GUARDAR RESERVA';
+      }
+    } catch (e) {
+      showError('Error de conexión. Verifica el internet e intenta de nuevo.');
+      btn.disabled = false;
+      btn.textContent = 'GUARDAR RESERVA';
+    }
+  }
+
+  function nuevaReserva() {
+    document.getElementById('form-container').style.display = 'block';
+    document.getElementById('success-screen').style.display = 'none';
+    // Limpiar formulario
+    ['huesped','telefono','fecha-entrada','fecha-salida','personas','anticipo','notas']
+      .forEach(id => document.getElementById(id).value = '');
+    habitacionesSeleccionadas = [];
+    document.querySelectorAll('.hab-btn').forEach(b => b.classList.remove('selected'));
+    setEstado('Anticipo pendiente');
+    hideError();
+    window.scrollTo(0, 0);
+  }
+</script>
+
+</body>
+</html>
