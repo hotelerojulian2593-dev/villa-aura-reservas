@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { crearHandler } from '../api/pagos.js';
 import { crearClienteFalso, sembrarDemo } from '../lib/airtable-falso.js';
 import { reiniciarFallos } from '../lib/pin.js';
-import { hoyBogota } from '../public/js/fechas.js';
+import { hoyBogota, sumarDias } from '../public/js/fechas.js';
 import { crearReq, crearRes, ENV } from './ayudas.js';
 
 const hoy = hoyBogota();
@@ -64,5 +64,16 @@ describe('POST /api/pagos', () => {
     const vieja = await cliente.crear('Reservas', { 'Huésped': 'Vieja', 'Fecha entrada': hoy, 'Fecha salida': hoy, 'Habitaciones': ['La Luis'], 'Estado': 'Anticipo pendiente' });
     const res = await llamar({ reservaId: vieja.id, monto: 50000, medio: 'Otro' });
     expect(res.body.resumen).toEqual({ valorTotal: null, pagado: 50000, saldo: null, estadoPago: 'sin_valor', estado: 'Confirmado' });
+  });
+});
+
+describe('pagos de reservas de canal', () => {
+  const d = (n) => sumarDias(hoy, n);
+  it('409: los pagos de Airbnb no se registran aquí', async () => {
+    const r = await cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': d(20), 'Fecha salida': d(22), 'Habitaciones': ['FULL HOUSE'], 'Estado': 'Confirmado', 'Fuente': 'Airbnb', 'UID canal': 'u1' });
+    const res = await llamar({ reservaId: r.id, monto: 1000, medio: 'Nequi' });
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toBe('Los pagos de Airbnb no se registran aquí.');
+    expect((await cliente.obtener('Reservas', r.id)).fields['Pagos'] ?? []).toEqual([]);
   });
 });

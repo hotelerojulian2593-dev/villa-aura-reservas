@@ -1,7 +1,7 @@
 import { clienteDesdeEnv } from '../lib/airtable.js';
 import {
   tablasDesdeEnv, cargarReservasConPagos, listarReservasEnRango, aReservaApi, cargarPagosPorIds,
-  camposReservaNueva, camposPagoNuevo, camposCambiosReserva, ESTADOS,
+  camposReservaNueva, camposPagoNuevo, camposCambiosReserva, ESTADOS, listarCanalesActivos, estadoCanal, FUENTES,
 } from '../lib/reservas.js';
 import { validarRango, validarReservaNueva, validarCambiosReserva, validarCancelacion } from '../lib/validar.js';
 import { responder, exigirPin, exigirPinGerencia, manejarError, sinCache } from '../lib/http.js';
@@ -23,6 +23,16 @@ async function reservaCompleta(cliente, tablas, id) {
   const reg = await cliente.obtener(tablas.reservas, id);
   const pagos = await cargarPagosPorIds(cliente, tablas.pagos, reg.fields['Pagos'] ?? []);
   return aReservaApi(reg, pagos);
+}
+
+// El calendario nunca se cae por la tabla Canales: si falla, la lista va vacía.
+async function estadoSincronizacion(cliente, tablas) {
+  try {
+    return (await listarCanalesActivos(cliente, tablas)).map(estadoCanal);
+  } catch (e) {
+    console.error('[canales]', e.message);
+    return [];
+  }
 }
 
 export function crearHandler(deps = {}) {
@@ -69,6 +79,9 @@ export function crearHandler(deps = {}) {
     };
     const reales = cambiosReales(antes, v.datos.cambios);
     if (Object.keys(reales).length === 0) return responder(res, 400, { ok: false, error: 'No hay cambios.' });
+    if (actual.fuente !== FUENTES.directo && ['entrada', 'salida', 'habitaciones'].some((k) => k in reales)) {
+      return responder(res, 400, { ok: false, error: `Las fechas y habitaciones de una reserva de ${actual.fuente} se cambian en ${actual.fuente}.` });
+    }
     const fusion = { ...antes, ...reales };
     if (fusion.salida <= fusion.entrada) return responder(res, 400, { ok: false, error: 'La fecha de salida debe ser posterior a la llegada.' });
     if ('entrada' in reales || 'salida' in reales || 'habitaciones' in reales) {
@@ -86,6 +99,7 @@ export function crearHandler(deps = {}) {
     if (!v.ok) return responder(res, 400, { ok: false, error: v.error });
     const actual = aReservaApi(await cliente.obtener(tablas.reservas, v.datos.id));
     if (actual.estado === ESTADOS.cancelada) return responder(res, 409, { ok: false, error: 'La reserva ya está cancelada.' });
+    if (actual.fuente !== FUENTES.directo) return responder(res, 409, { ok: false, error: `Esta reserva es de ${actual.fuente}: cancélala en ${actual.fuente} y desaparecerá aquí.` });
     const linea = lineaHistorial(`canceló · motivo: ${v.datos.motivo}`, ahora());
     await cliente.actualizar(tablas.reservas, actual.id, { 'Estado': ESTADOS.cancelada, 'Historial': anteponer(actual.historial, linea) });
     return responder(res, 200, { ok: true, reserva: await reservaCompleta(cliente, tablas, actual.id) });
@@ -105,7 +119,7 @@ export function crearHandler(deps = {}) {
         const v = validarRango(req.query ?? {});
         if (!v.ok) return responder(res, 400, { ok: false, error: v.error });
         const reservas = await cargarReservasConPagos(cliente, tablas, v.datos.desde, v.datos.hasta, { incluirCanceladas });
-        return responder(res, 200, { ok: true, ...v.datos, reservas });
+        return responder(res, 200, { ok: true, ...v.datos, reservas, sincronizacion: await estadoSincronizacion(cliente, tablas) });
       }
 
       if (req.method === 'PATCH') {

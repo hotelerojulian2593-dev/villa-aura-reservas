@@ -109,3 +109,20 @@ describe('POST', () => {
     expect(res.body.error).toMatch(/Airtable no está disponible/);
   });
 });
+
+describe('GET — estado de sincronización', () => {
+  it('incluye los canales activos; si Canales falla, sigue respondiendo con lista vacía', async () => {
+    const res = await llamar(crearReq({ query: { desde: hoy, hasta: d(30) } }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.sincronizacion).toEqual([{ canal: 'Airbnb', ultimaLectura: null, ultimoResultado: '' }]);
+    expect(res.body.reservas[0].fuente).toBe('Directo');
+    const roto = { ...cliente, listar: (tabla, opciones) => (tabla === 'Canales'
+      ? Promise.reject(new AirtableError('Invalid permissions, or the requested model was not found.', 403, { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } }))
+      : cliente.listar(tabla, opciones)) };
+    const res2 = crearRes();
+    await crearHandler({ cliente: roto, env: ENV, dormir })(crearReq({ query: { desde: hoy, hasta: d(30) } }), res2);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.body.sincronizacion).toEqual([]);
+    expect(res2.body.reservas.length).toBeGreaterThan(0);
+  });
+});

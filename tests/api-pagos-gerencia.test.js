@@ -101,3 +101,14 @@ describe('revisión final — historial de una línea', () => {
     expect((await historialDe(ids.a)).split('\n')).toHaveLength(1);
   });
 });
+
+describe('PATCH de abonos de reservas de canal', () => {
+  it('409 al corregir o anular un abono de una reserva de Airbnb', async () => {
+    const r = await cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': sumarDias(hoy, 20), 'Fecha salida': sumarDias(hoy, 22), 'Habitaciones': ['FULL HOUSE'], 'Estado': 'Confirmado', 'Fuente': 'Airbnb', 'UID canal': 'u1' });
+    const p = await cliente.crear('Pagos', { 'Concepto': 'x', 'Reserva': [r.id], 'Fecha': hoy, 'Monto': 1000, 'Medio': 'Nequi' });
+    expect((await patch({ id: p.id, cambios: { monto: 2000 } })).body.error).toBe('Los pagos de Airbnb no se registran aquí.');
+    const res = await patch({ id: p.id, anular: { motivo: 'x' } });
+    expect(res.statusCode).toBe(409);
+    expect((await cliente.obtener('Pagos', p.id)).fields['Monto']).toBe(1000);
+  });
+});

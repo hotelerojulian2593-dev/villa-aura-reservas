@@ -154,3 +154,25 @@ describe('revisión final — freno, historial y habitaciones', () => {
     expect((await cliente.obtener('Reservas', ids.a)).fields['Habitaciones']).toEqual(['La Rosaura', 'La Clara']);
   });
 });
+
+describe('PATCH sobre reservas de canal', () => {
+  const crearDeAirbnb = () => cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': d(20), 'Fecha salida': d(22), 'Habitaciones': ['FULL HOUSE'], 'Estado': 'Confirmado', 'Fuente': 'Airbnb', 'UID canal': 'u1' });
+  it('no se cancela aquí', async () => {
+    const r = await crearDeAirbnb();
+    const res = await patch({ id: r.id, cancelar: { motivo: 'x' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toBe('Esta reserva es de Airbnb: cancélala en Airbnb y desaparecerá aquí.');
+    expect((await cliente.obtener('Reservas', r.id)).fields['Estado']).toBe('Confirmado');
+  });
+  it('fechas y habitaciones se cambian en Airbnb; nombre, teléfono, personas, valor y notas sí se editan', async () => {
+    const r = await crearDeAirbnb();
+    const malo = await patch({ id: r.id, cambios: { salida: d(23) } });
+    expect(malo.statusCode).toBe(400);
+    expect(malo.body.error).toBe('Las fechas y habitaciones de una reserva de Airbnb se cambian en Airbnb.');
+    expect((await patch({ id: r.id, cambios: { habitaciones: ['La Elsa'] } })).statusCode).toBe(400);
+    const bueno = await patch({ id: r.id, cambios: { huesped: 'Laura Díaz', telefono: '3001112233', personas: 8, valorTotal: 900000, notas: 'Llegan a las 3' } });
+    expect(bueno.statusCode).toBe(200);
+    expect(bueno.body.reserva).toMatchObject({ huesped: 'Laura Díaz', personas: 8, valorTotal: 900000, fuente: 'Airbnb', habitaciones: ['FULL HOUSE'] });
+    expect(bueno.body.reserva.historial.split('\n')[0]).toContain('editó Huésped: Airbnb → Laura Díaz');
+  });
+});
