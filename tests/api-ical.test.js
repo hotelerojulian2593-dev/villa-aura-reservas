@@ -48,3 +48,13 @@ describe('GET /api/ical/<clave>.ics', () => {
     expect(res.body).toBe('Airtable no está disponible en este momento.');
   });
 });
+
+describe('HEAD (algunos importadores prueban el enlace antes de leerlo)', () => {
+  it('HEAD con clave correcta → 200 text/calendar sin cuerpo; con clave mala → 401', async () => {
+    const res = await llamar(req(`${CLAVE}.ics`, 'HEAD'));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Content-Type']).toBe('text/calendar; charset=utf-8');
+    expect(res.body).toBe('');
+    expect((await llamar(req('mala.ics', 'HEAD'))).statusCode).toBe(401);
+  });
+});

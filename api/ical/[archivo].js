@@ -17,12 +17,17 @@ export function crearHandler(deps = {}) {
   const ahora = () => (deps.ahora ? deps.ahora() : new Date());
   return async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
-    if (req.method !== 'GET') return texto(res, 405, 'Método no permitido.');
+    if (req.method !== 'GET' && req.method !== 'HEAD') return texto(res, 405, 'Método no permitido.');
     const env = deps.env ?? process.env;
     if (!env.ICAL_CLAVE) return texto(res, 500, 'ICAL_CLAVE no configurada en el servidor.');
     const archivo = String(req.query?.archivo ?? '');
     if (!archivo.endsWith('.ics') || !pinCorrecto(archivo.slice(0, -4), env.ICAL_CLAVE)) return texto(res, 401, 'Clave incorrecta.');
+    if (req.method === 'HEAD') {
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+      return res.status(200).send('');
+    }
     try {
+      console.log('[ical] lectura', String(req.headers?.['user-agent'] ?? '').slice(0, 80));
       const cliente = deps.cliente ?? clienteDesdeEnv(env);
       const tablas = tablasDesdeEnv(env);
       const hoy = hoyBogota(ahora());
