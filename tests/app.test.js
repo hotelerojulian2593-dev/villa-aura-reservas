@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapar, pinValido, ErrorApi } from '../public/js/app.js';
+import { escapar, pinValido, ErrorApi, encabezados, esErrorDeGerencia, CLAVE_PIN_GERENCIA } from '../public/js/app.js';
 
 describe('app.js (partes puras)', () => {
   it('escapa HTML para no inyectar nombres de huéspedes', () => {
@@ -17,5 +17,18 @@ describe('app.js (partes puras)', () => {
     expect(e).toBeInstanceOf(Error);
     expect(e.status).toBe(409);
     expect(e.datos).toEqual({ conflicto: {} });
+  });
+});
+
+describe('app.js (gerencia)', () => {
+  it('encabezados: X-Pin siempre; X-Pin-Gerencia solo con gerencia', () => {
+    expect(Object.keys(encabezados())).toEqual(['Content-Type', 'X-Pin']);
+    expect(Object.keys(encabezados({ gerencia: true }))).toEqual(['Content-Type', 'X-Pin', 'X-Pin-Gerencia']);
+  });
+  it('distingue el 401 de gerencia del de las señoras', () => {
+    expect(esErrorDeGerencia('PIN de gerencia incorrecto.')).toBe(true);
+    expect(esErrorDeGerencia('PIN incorrecto.')).toBe(false);
+    expect(esErrorDeGerencia(undefined)).toBe(false);
+    expect(CLAVE_PIN_GERENCIA).toBe('va_pin_gerencia');
   });
 });

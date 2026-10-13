@@ -18,6 +18,28 @@ export function pinValido(pin) {
   return /^\d{4,6}$/.test(pin);
 }
 
+export const CLAVE_PIN_GERENCIA = 'va_pin_gerencia';
+
+export function obtenerPinGerencia() {
+  try { return localStorage.getItem(CLAVE_PIN_GERENCIA) || ''; } catch { return ''; }
+}
+export function guardarPinGerencia(pin) {
+  try { localStorage.setItem(CLAVE_PIN_GERENCIA, pin); } catch { /* modo privado */ }
+}
+export function borrarPinGerencia() {
+  try { localStorage.removeItem(CLAVE_PIN_GERENCIA); } catch { /* nada */ }
+}
+
+export function encabezados({ gerencia = false } = {}) {
+  const h = { 'Content-Type': 'application/json', 'X-Pin': obtenerPin() };
+  if (gerencia) h['X-Pin-Gerencia'] = obtenerPinGerencia();
+  return h;
+}
+
+export function esErrorDeGerencia(mensaje) {
+  return /gerencia/i.test(String(mensaje ?? ''));
+}
+
 export class ErrorApi extends Error {
   constructor(mensaje, status, datos = {}) {
     super(mensaje);
@@ -26,12 +48,12 @@ export class ErrorApi extends Error {
   }
 }
 
-export async function api(ruta, { method = 'GET', body } = {}) {
+export async function api(ruta, { method = 'GET', body, gerencia = false } = {}) {
   let respuesta;
   try {
     respuesta = await fetch(ruta, {
       method,
-      headers: { 'Content-Type': 'application/json', 'X-Pin': obtenerPin() },
+      headers: encabezados({ gerencia }),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -40,7 +62,7 @@ export async function api(ruta, { method = 'GET', body } = {}) {
   let datos = {};
   try { datos = await respuesta.json(); } catch { /* respuesta sin JSON */ }
   if (respuesta.status === 401) {
-    borrarPin();
+    if (esErrorDeGerencia(datos.error)) borrarPinGerencia(); else borrarPin();
     throw new ErrorApi(datos.error || 'PIN incorrecto.', 401, datos);
   }
   if (!respuesta.ok) throw new ErrorApi(datos.error || 'Error inesperado. Intenta de nuevo.', respuesta.status, datos);
