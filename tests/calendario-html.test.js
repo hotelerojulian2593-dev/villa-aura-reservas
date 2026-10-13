@@ -22,4 +22,10 @@ describe('calendario.html — bloque de gerencia', () => {
     expect(html).toContain('Cobro a través de ${escapar(r.fuente)}');
     expect(html).toMatch(/aviso--rojo/);
   });
+  it('dibuja la grilla como cuadrícula con barras de media casilla a media casilla', () => {
+    expect(html).toContain('lineasDeBarra(b, dias)');
+    expect(html).toContain('grid-column:${inicio} / ${fin}');
+    expect(html).toContain('repeat(${dias * 2}, var(--medio))');
+    expect(html).not.toContain('<table class="grilla">');
+  });
 });

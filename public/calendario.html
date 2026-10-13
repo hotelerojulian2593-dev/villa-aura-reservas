@@ -18,16 +18,18 @@
     .kpi__v { font-size: 18px; font-weight: 700; }
     .kpi__s { font-size: 10px; color: var(--gris-claro); }
     .grilla-wrap { background: #fff; border-radius: var(--radio); box-shadow: var(--sombra); overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 10px; min-height: 120px; }
-    table.grilla { border-collapse: separate; border-spacing: 0; font-size: 12px; }
-    .grilla th, .grilla td { border-bottom: 1px solid var(--borde); height: 46px; }
-    .grilla thead th { width: 38px; min-width: 38px; font-weight: 500; font-size: 12px; color: var(--gris); background: #fff; }
-    .grilla thead th span { display: block; font-size: 9px; color: var(--gris-claro); }
-    .grilla th.finde, .grilla td.finde { background: #F4F4F6; }
-    .grilla thead th.hoy { color: var(--dorado); font-weight: 700; }
-    .grilla td.hoy { box-shadow: inset 2px 0 0 var(--dorado); }
-    .grilla__hab { position: sticky; left: 0; z-index: 2; background: #fff; text-align: left; padding: 0 10px; font-size: 13px; font-weight: 600; min-width: 112px; border-right: 1px solid var(--borde); }
-    .celda-barra { padding: 5px 1px; }
-    .barra { display: block; width: 100%; height: 36px; border: none; border-radius: 6px; color: #fff; font-size: 12px; font-weight: 600; text-align: left; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+    /* Cuadrícula: columna 1 = habitación; cada día son dos medias columnas, así una barra va de la
+       mitad del día de llegada a la mitad del día de salida (como en los planos de hotel). */
+    .grilla { --medio: 19px; --hab: 112px; display: grid; grid-auto-rows: 46px; font-size: 12px; width: max-content; min-width: 100%; }
+    .grilla__esquina { grid-row: 1; grid-column: 1; position: sticky; left: 0; z-index: 3; background: #fff; border-bottom: 1px solid var(--borde); border-right: 1px solid var(--borde); }
+    .grilla__dia { grid-row: 1; display: flex; flex-direction: column; justify-content: center; text-align: center; font-weight: 500; color: var(--gris); background: #fff; border-bottom: 1px solid var(--borde); }
+    .grilla__dia span { display: block; font-size: 9px; color: var(--gris-claro); }
+    .grilla__dia.finde, .grilla__celda.finde { background: #F4F4F6; }
+    .grilla__dia.hoy { color: var(--dorado); font-weight: 700; }
+    .grilla__celda { border-bottom: 1px solid var(--borde); }
+    .grilla__celda.hoy { box-shadow: inset 2px 0 0 var(--dorado); }
+    .grilla__hab { grid-column: 1; position: sticky; left: 0; z-index: 2; background: #fff; display: flex; align-items: center; padding: 0 10px; font-size: 13px; font-weight: 600; border-right: 1px solid var(--borde); border-bottom: 1px solid var(--borde); }
+    .barra { z-index: 1; align-self: center; height: 36px; margin: 0 1px; border: none; border-radius: 6px; color: #fff; font-size: 12px; font-weight: 600; text-align: left; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
     .barra--confirmado { background: var(--navy); }
     .barra--pendiente { background: var(--dorado); }
     .barra--fullhouse { background: var(--azul-data); }
@@ -83,11 +85,9 @@
       .kpi__t { font-size: 11px; }
       .kpi__v { font-size: 24px; }
       .kpi__s { font-size: 11px; }
-      table.grilla { font-size: 13px; }
-      .grilla th, .grilla td { height: 54px; }
-      .grilla thead th { width: 48px; min-width: 48px; font-size: 13px; }
-      .grilla thead th span { font-size: 10px; }
-      .grilla__hab { font-size: 14px; min-width: 130px; }
+      .grilla { --medio: 24px; --hab: 130px; grid-auto-rows: 54px; font-size: 13px; }
+      .grilla__dia span { font-size: 10px; }
+      .grilla__hab { font-size: 14px; }
       .barra { height: 42px; font-size: 13px; }
       .lista { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
       .reserva__cab { font-size: 15px; }
@@ -142,7 +142,7 @@
   import { HABITACIONES, FULL_HOUSE, OPCIONES_HABITACION } from '/js/disponibilidad.js';
   import { esDeCanal } from '/js/canales.js';
   import { kpisMes } from '/js/pagos.js';
-  import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque } from '/js/calendario-logica.js';
+  import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque, lineasDeBarra } from '/js/calendario-logica.js';
 
   const MEDIOS = ['Nequi', 'Bancolombia', 'Daviplata', 'Efectivo', 'Otro'];
   const $ = (id) => document.getElementById(id);
@@ -336,35 +336,28 @@
   function dibujarGrilla(desde, hasta) {
     const { dias } = rangoMes(anio, mes);
     const isoDia = (d) => `${desde.slice(0, 8)}${String(d).padStart(2, '0')}`;
-    const claseDia = (iso) => `${esFinDeSemana(iso) ? 'finde' : ''} ${iso === hoy ? 'hoy' : ''}`;
-    let html = '<table class="grilla"><thead><tr><th class="grilla__hab"></th>';
+    const claseDia = (iso) => `${esFinDeSemana(iso) ? ' finde' : ''}${iso === hoy ? ' hoy' : ''}`;
+    let html = `<div class="grilla" style="grid-template-columns: var(--hab) repeat(${dias * 2}, var(--medio))"><div class="grilla__esquina"></div>`;
     for (let d = 1; d <= dias; d += 1) {
-      html += `<th class="${claseDia(isoDia(d))}"><span>${DIAS_CORTOS[diaSemana(isoDia(d))]}</span>${d}</th>`;
+      html += `<div class="grilla__dia${claseDia(isoDia(d))}" style="grid-column:${2 * d} / span 2"><span>${DIAS_CORTOS[diaSemana(isoDia(d))]}</span>${d}</div>`;
     }
-    html += '</tr></thead><tbody>';
-    for (const hab of HABITACIONES) {
-      html += `<tr><th class="grilla__hab">${escapar(hab)}</th>`;
-      const barras = reservas
+    HABITACIONES.forEach((hab, i) => {
+      const fila = i + 2;
+      html += `<div class="grilla__hab" style="grid-row:${fila}">${escapar(hab)}</div>`;
+      for (let d = 1; d <= dias; d += 1) html += `<div class="grilla__celda${claseDia(isoDia(d))}" style="grid-row:${fila};grid-column:${2 * d} / span 2"></div>`;
+      reservas
         .filter((r) => filasDe(r).includes(hab))
         .map((r) => ({ r, b: barraEnMes(r, desde, hasta) }))
         .filter((x) => x.b)
-        .sort((x, y) => x.b.diaInicio - y.b.diaInicio);
-      let d = 1;
-      for (const { r, b } of barras) {
-        if (b.diaInicio < d) continue; // datos viejos solapados: se dibuja la primera
-        while (d < b.diaInicio) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
-        const siguiente = barras.find((x) => x.b.diaInicio > b.diaInicio)?.b.diaInicio ?? dias + 1;
-        const span = Math.min(b.span, siguiente - b.diaInicio, dias + 1 - b.diaInicio);
-        html += `<td colspan="${span}" class="celda-barra"><button type="button" class="barra barra--${colorEstado(r)}${b.cortadaIzq ? ' cortada-izq' : ''}${b.cortadaDer ? ' cortada-der' : ''}" data-id="${r.id}" title="${escapar(r.huesped)}">${choques.has(r.id) ? '⚠ ' : ''}${escapar(r.huesped)}</button></td>`;
-        d += span;
-      }
-      while (d <= dias) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
-      html += '</tr>';
-    }
-    html += '</tbody></table>';
+        .forEach(({ r, b }) => {
+          const { inicio, fin } = lineasDeBarra(b, dias);
+          html += `<button type="button" class="barra barra--${colorEstado(r)}${b.cortadaIzq ? ' cortada-izq' : ''}${b.cortadaDer ? ' cortada-der' : ''}" style="grid-row:${fila};grid-column:${inicio} / ${fin}" data-id="${r.id}" title="${escapar(r.huesped)}">${choques.has(r.id) ? '⚠ ' : ''}${escapar(r.huesped)}</button>`;
+        });
+    });
+    html += '</div>';
     $('grilla').innerHTML = html;
     $('grilla').querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => abrirDetalle(b.dataset.id)));
-    const columnaHoy = $('grilla').querySelector('thead th.hoy');
+    const columnaHoy = $('grilla').querySelector('.grilla__dia.hoy');
     if (columnaHoy) $('grilla').scrollLeft = Math.max(0, columnaHoy.offsetLeft - 130);
   }
 

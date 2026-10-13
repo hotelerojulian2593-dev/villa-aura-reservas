@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque,
+  barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque, lineasDeBarra,
 } from '../public/js/calendario-logica.js';
 
 const MES = { desde: '2026-10-01', hasta: '2026-11-01' };
@@ -80,5 +80,21 @@ describe('reservas de canal', () => {
   it('etiquetaPago para canal', () => {
     expect(etiquetaPago(AIRBNB)).toBe('Cobro en Airbnb');
     expect(etiquetaPago({ ...AIRBNB, fuente: 'Directo' })).toBe('Valor total sin definir');
+  });
+});
+
+describe('lineasDeBarra — barras estilo hotel (de media casilla a media casilla)', () => {
+  // Columna 1 = nombre de la habitación; cada día ocupa dos medias columnas: el día d va de la línea 2d a la 2d+2.
+  it('del 17 al 19: arranca a mitad del 17 y termina a mitad del 19', () => {
+    expect(lineasDeBarra(barraEnMes(A, MES.desde, MES.hasta), 31)).toEqual({ inicio: 35, fin: 39 });
+  });
+  it('una noche ocupa el ancho de una casilla (mitad del 15 a mitad del 16)', () => {
+    expect(lineasDeBarra({ diaInicio: 15, span: 1, cortadaIzq: false, cortadaDer: false }, 31)).toEqual({ inicio: 31, fin: 33 });
+  });
+  it('recortada a la derecha llega hasta el borde del último día', () => {
+    expect(lineasDeBarra(barraEnMes(B, MES.desde, MES.hasta), 31)).toEqual({ inicio: 61, fin: 64 });
+  });
+  it('recortada a la izquierda arranca en el borde del día 1', () => {
+    expect(lineasDeBarra(barraEnMes(D, MES.desde, MES.hasta), 31)).toEqual({ inicio: 2, fin: 5 });
   });
 });

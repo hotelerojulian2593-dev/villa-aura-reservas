@@ -65,3 +65,12 @@ export function idsConChoque(reservas) {
   }
   return ids;
 }
+
+// Líneas de la cuadrícula CSS que ocupa una barra, al estilo de los planos de hotel: de la mitad
+// del día de llegada a la mitad del día de salida. La columna 1 es el nombre de la habitación y
+// cada día ocupa dos medias columnas (el día d va de la línea 2d a la 2d+2).
+export function lineasDeBarra(b, dias) {
+  const inicio = b.cortadaIzq ? 2 : 2 * b.diaInicio + 1;
+  const fin = b.cortadaDer ? 2 * dias + 2 : 2 * (b.diaInicio + b.span) + 1;
+  return { inicio, fin };
+}
