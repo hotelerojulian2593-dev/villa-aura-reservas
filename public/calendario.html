@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Villa Aura — Calendario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    .barra-mes { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
+    .barra-mes h2 { font-size: 16px; text-transform: capitalize; }
+    .barra-mes button { background: #fff; border: 1.5px solid var(--borde); border-radius: 10px; min-width: 44px; min-height: 44px; font-size: 20px; cursor: pointer; color: var(--navy); }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .kpi { padding: 10px 8px; text-align: center; display: flex; flex-direction: column; gap: 2px; min-height: 74px; justify-content: center; }
+    .kpi__t { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gris); }
+    .kpi__v { font-size: 15px; font-weight: 700; }
+    .kpi__s { font-size: 9px; color: var(--gris-claro); }
+    .grilla-wrap { background: #fff; border-radius: var(--radio); box-shadow: var(--sombra); overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 10px; min-height: 120px; }
+    table.grilla { border-collapse: separate; border-spacing: 0; font-size: 10px; }
+    .grilla th, .grilla td { border-bottom: 1px solid var(--borde); height: 36px; }
+    .grilla thead th { width: 28px; min-width: 28px; font-weight: 500; color: var(--gris); background: #fff; }
+    .grilla thead th span { display: block; font-size: 8px; color: var(--gris-claro); }
+    .grilla th.finde, .grilla td.finde { background: #F4F4F6; }
+    .grilla thead th.hoy { color: var(--dorado); font-weight: 700; }
+    .grilla td.hoy { box-shadow: inset 2px 0 0 var(--dorado); }
+    .grilla__hab { position: sticky; left: 0; z-index: 2; background: #fff; text-align: left; padding: 0 10px; font-size: 11px; font-weight: 600; min-width: 100px; border-right: 1px solid var(--borde); }
+    .celda-barra { padding: 4px 1px; }
+    .barra { display: block; width: 100%; height: 28px; border: none; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 600; text-align: left; padding: 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+    .barra--confirmado { background: var(--navy); }
+    .barra--pendiente { background: var(--dorado); }
+    .barra--fullhouse { background: var(--azul-data); }
+    .barra.cortada-izq { border-radius: 0 6px 6px 0; }
+    .barra.cortada-der { border-radius: 6px 0 0 6px; }
+    .leyenda { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--gris); margin-bottom: 18px; }
+    .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+    .leyenda .boton--chico { margin-left: auto; }
+    .seccion { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gris); margin: 0 0 10px; }
+    .lista { display: flex; flex-direction: column; gap: 10px; }
+    .reserva { width: 100%; text-align: left; border: none; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+    .reserva__cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+    .reserva__sub { font-size: 12px; color: var(--gris); }
+    .vacio { color: var(--gris); font-size: 13px; text-align: center; }
+    .detalle__cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    .detalle__cab h2 { font-size: 18px; }
+    .detalle__cab p { font-size: 12px; color: var(--gris); }
+    .detalle__notas { font-size: 12px; background: var(--fondo); border-radius: 8px; padding: 8px 10px; margin: 10px 0; }
+    .totales { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+    .totales div { background: var(--fondo); border-radius: 8px; padding: 8px; text-align: center; }
+    .totales span { display: block; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gris); }
+    .totales strong { font-size: 13px; }
+    .pagos { list-style: none; margin: 0 0 14px; }
+    .pagos li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: 12px; }
+    .pagos li em { grid-column: 1 / -1; font-size: 11px; color: var(--gris); font-style: normal; }
+    .form-abono { background: var(--fondo); border-radius: var(--radio); padding: 14px; margin: 12px 0; }
+    .form-abono .boton { margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header class="encabezado">
+  <div class="encabezado__fila">
+    <div>
+      <div class="encabezado__tag">Calendario</div>
+      <h1>VILLA AURA</h1>
+      <p>Ocupación y pagos</p>
+    </div>
+    <a class="boton boton--chico" href="/">+ Nueva reserva</a>
+  </div>
+</header>
+
+<div id="pin"></div>
+
+<main id="app" class="contenedor oculto">
+  <div class="barra-mes">
+    <button type="button" id="mes-ant" aria-label="Mes anterior">‹</button>
+    <h2 id="titulo-mes"></h2>
+    <button type="button" id="mes-sig" aria-label="Mes siguiente">›</button>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="grilla-wrap" id="grilla"></div>
+  <div class="leyenda">
+    <span><i style="background:var(--navy)"></i>Confirmado</span>
+    <span><i style="background:var(--dorado)"></i>Anticipo pendiente</span>
+    <span><i style="background:var(--azul-data)"></i>Full House</span>
+    <button type="button" class="boton boton--secundario boton--chico" id="actualizar">Actualizar</button>
+  </div>
+  <div class="error" id="falla" role="alert"><span id="falla-texto"></span><br><button type="button" class="boton boton--chico" id="reintentar" style="margin-top:8px">Reintentar</button></div>
+  <h3 class="seccion">Próximas llegadas</h3>
+  <div class="lista" id="lista"></div>
+</main>
+
+<div id="hoja"></div>
+<footer class="pie">Villa Aura · Sistema de reservas · Marketing Hotelero</footer>
+
+<script type="module">
+  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo } from '/js/app.js';
+  import { hoyBogota, rangoMes, mesDeISO, nombreMes, esFinDeSemana, diaSemana, fechaCorta, DIAS_CORTOS } from '/js/fechas.js';
+  import { formatearCOP, parsearCOP } from '/js/dinero.js';
+  import { HABITACIONES } from '/js/disponibilidad.js';
+  import { kpisMes } from '/js/pagos.js';
+  import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago } from '/js/calendario-logica.js';
+
+  const MEDIOS = ['Nequi', 'Bancolombia', 'Daviplata', 'Efectivo', 'Otro'];
+  const $ = (id) => document.getElementById(id);
+  let hoy = hoyBogota();
+  let { anio, mes } = mesDeISO(hoy);
+  let reservas = [];
+  let cargando = false;
+
+  function iniciar() {
+    $('app').classList.remove('oculto');
+    $('mes-ant').addEventListener('click', () => cambiarMes(-1));
+    $('mes-sig').addEventListener('click', () => cambiarMes(1));
+    $('actualizar').addEventListener('click', cargar);
+    $('reintentar').addEventListener('click', cargar);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cargar(); });
+    cargar();
+  }
+
+  function cambiarMes(delta) {
+    mes += delta;
+    if (mes === 0) { mes = 12; anio -= 1; }
+    if (mes === 13) { mes = 1; anio += 1; }
+    cargar();
+  }
+
+  function pedirPin() {
+    $('app').classList.add('oculto');
+    cerrarHoja();
+    asegurarPin({ raiz: $('pin'), alListo: () => { $('app').classList.remove('oculto'); cargar(); } });
+  }
+
+  async function cargar() {
+    if (cargando) return;
+    cargando = true;
+    hoy = hoyBogota();
+    const { desde, hasta } = rangoMes(anio, mes);
+    $('titulo-mes').textContent = `${nombreMes(mes)} ${anio}`;
+    $('kpis').innerHTML = '<div class="tarjeta esqueleto"></div>'.repeat(3);
+    $('grilla').innerHTML = '<div class="esqueleto" style="height:200px"></div>';
+    $('lista').innerHTML = '';
+    ocultarError($('falla'));
+    try {
+      ({ reservas } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
+      dibujar();
+    } catch (e) {
+      if (e.status === 401) pedirPin();
+      else { $('falla-texto').textContent = e.message; $('falla').classList.add('visible'); $('grilla').innerHTML = ''; $('kpis').innerHTML = ''; }
+    } finally {
+      cargando = false;
+    }
+  }
+
+  function dibujar() {
+    const { desde, hasta } = rangoMes(anio, mes);
+    dibujarKpis(desde, hasta);
+    dibujarGrilla(desde, hasta);
+    dibujarLista();
+  }
+
+  const kpi = (titulo, valor, sub) => `<div class="tarjeta kpi"><span class="kpi__t">${titulo}</span><strong class="kpi__v">${valor}</strong><span class="kpi__s">${escapar(sub)}</span></div>`;
+
+  function dibujarKpis(desde, hasta) {
+    const k = kpisMes(reservas, desde, hasta);
+    $('kpis').innerHTML = kpi('Ocupación', `${k.ocupacion}%`, `${k.nochesOcupadas} noches-hab.`)
+      + kpi('Cobrado', formatearCOP(k.cobrado), 'pagos del mes')
+      + kpi('Por cobrar', formatearCOP(k.porCobrar), k.sinValor ? `${k.sinValor} sin valor total` : 'saldos del mes');
+  }
+
+  function dibujarGrilla(desde, hasta) {
+    const { dias } = rangoMes(anio, mes);
+    const isoDia = (d) => `${desde.slice(0, 8)}${String(d).padStart(2, '0')}`;
+    const claseDia = (iso) => `${esFinDeSemana(iso) ? 'finde' : ''} ${iso === hoy ? 'hoy' : ''}`;
+    let html = '<table class="grilla"><thead><tr><th class="grilla__hab"></th>';
+    for (let d = 1; d <= dias; d += 1) {
+      html += `<th class="${claseDia(isoDia(d))}"><span>${DIAS_CORTOS[diaSemana(isoDia(d))]}</span>${d}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (const hab of HABITACIONES) {
+      html += `<tr><th class="grilla__hab">${escapar(hab)}</th>`;
+      const barras = reservas
+        .filter((r) => filasDe(r).includes(hab))
+        .map((r) => ({ r, b: barraEnMes(r, desde, hasta) }))
+        .filter((x) => x.b)
+        .sort((x, y) => x.b.diaInicio - y.b.diaInicio);
+      let d = 1;
+      for (const { r, b } of barras) {
+        if (b.diaInicio < d) continue; // datos viejos solapados: se dibuja la primera
+        while (d < b.diaInicio) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
+        const siguiente = barras.find((x) => x.b.diaInicio > b.diaInicio)?.b.diaInicio ?? dias + 1;
+        const span = Math.min(b.span, siguiente - b.diaInicio, dias + 1 - b.diaInicio);
+        html += `<td colspan="${span}" class="celda-barra"><button type="button" class="barra barra--${colorEstado(r)}${b.cortadaIzq ? ' cortada-izq' : ''}${b.cortadaDer ? ' cortada-der' : ''}" data-id="${r.id}" title="${escapar(r.huesped)}">${escapar(r.huesped)}</button></td>`;
+        d += span;
+      }
+      while (d <= dias) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    $('grilla').innerHTML = html;
+    $('grilla').querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => abrirDetalle(b.dataset.id)));
+    const columnaHoy = $('grilla').querySelector('thead th.hoy');
+    if (columnaHoy) $('grilla').scrollLeft = Math.max(0, columnaHoy.offsetLeft - 130);
+  }
+
+  function tarjeta(r) {
+    return `<button type="button" class="tarjeta reserva" data-id="${r.id}">
+      <div class="reserva__cab"><strong>${escapar(r.huesped)}</strong><span class="estado estado--${colorEstado(r)}">${escapar(r.estado)}</span></div>
+      <div class="reserva__sub">${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'} · ${r.personas} pers.</div>
+      <div class="reserva__sub">${escapar(r.habitaciones.join(' · '))}</div>
+      <div class="pago"><div class="pago__barra"><span style="width:${porcentajePago(r)}%"></span></div><span class="pago__txt pago--${r.estadoPago}">${escapar(etiquetaPago(r))}</span></div>
+    </button>`;
+  }
+
+  function dibujarLista() {
+    const orden = ordenarProximas(reservas, hoy);
+    $('lista').innerHTML = orden.length ? orden.map(tarjeta).join('') : '<div class="tarjeta vacio">Mes libre — ninguna reserva.</div>';
+    $('lista').querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => abrirDetalle(b.dataset.id)));
+  }
+
+  function cerrarHoja() { $('hoja').innerHTML = ''; }
+
+  function abrirDetalle(id) {
+    const r = reservas.find((x) => x.id === id);
+    if (!r) return;
+    const wa = telefonoWa(r.telefono);
+    const pagos = r.pagos.length
+      ? r.pagos.map((p) => `<li><span>${fechaCorta(p.fecha)} · ${escapar(p.medio ?? '—')}</span><strong>${formatearCOP(p.monto)}</strong>${p.nota ? `<em>${escapar(p.nota)}</em>` : ''}</li>`).join('')
+      : '<li class="vacio">Sin abonos registrados.</li>';
+    const saldoSugerido = r.saldo > 0 ? formatearCOP(r.saldo) : '';
+    $('hoja').innerHTML = `
+      <div class="hoja-fondo" id="hoja-fondo">
+        <div class="hoja" role="dialog" aria-modal="true" aria-label="Detalle de la reserva">
+          <div class="hoja__asa"></div>
+          <div class="detalle__cab">
+            <div>
+              <h2>${escapar(r.huesped)}</h2>
+              <p>${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'} · ${r.personas} pers.</p>
+              <p>${escapar(r.habitaciones.join(' · '))}</p>
+            </div>
+            <span class="estado estado--${colorEstado(r)}">${escapar(r.estado)}</span>
+          </div>
+          ${wa ? `<a class="boton boton--secundario boton--chico" href="${wa}" target="_blank" rel="noopener">WhatsApp · ${escapar(r.telefono)}</a>` : `<span class="reserva__sub">${escapar(r.telefono)}</span>`}
+          ${r.notas ? `<p class="detalle__notas">${escapar(r.notas)}</p>` : ''}
+          <div class="totales">
+            <div><span>Valor total</span><strong>${r.valorTotal == null ? 'Sin definir' : formatearCOP(r.valorTotal)}</strong></div>
+            <div><span>Pagado</span><strong>${formatearCOP(r.pagado)}</strong></div>
+            <div><span>Saldo</span><strong class="pago--${r.estadoPago}">${r.saldo == null ? '—' : formatearCOP(r.saldo)}</strong></div>
+          </div>
+          ${r.valorTotal == null ? '<div class="aviso">Valor total sin definir — pídele a gerencia completarlo en Airtable.</div>' : ''}
+          <ul class="pagos">${pagos}</ul>
+          <button type="button" class="boton boton--dorado" id="abrir-abono">Registrar abono</button>
+          <form id="form-abono" class="form-abono oculto">
+            <div class="campo"><label for="abono-monto">Monto <span class="req">*</span></label><input class="entrada" id="abono-monto" inputmode="numeric" autocomplete="off" placeholder="$ 0" value="${saldoSugerido}"></div>
+            <div class="campo"><span class="etiqueta">Medio <span class="req">*</span></span><div class="chips chips--medios">${MEDIOS.map((m) => `<button type="button" class="chip chip--medio" data-medio="${m}">${m}</button>`).join('')}</div></div>
+            <div class="fila-2">
+              <div class="campo"><label for="abono-fecha">Fecha</label><input class="entrada" type="date" id="abono-fecha" value="${hoy}"></div>
+              <div class="campo"><label for="abono-nota">Nota</label><input class="entrada" id="abono-nota" placeholder="Opcional"></div>
+            </div>
+            <div class="error" id="abono-error" role="alert"></div>
+            <button type="submit" class="boton boton--dorado" id="guardar-abono">Guardar abono</button>
+          </form>
+          <button type="button" class="boton boton--secundario" id="cerrar">Cerrar</button>
+        </div>
+      </div>`;
+    $('hoja-fondo').addEventListener('click', (ev) => { if (ev.target === $('hoja-fondo')) cerrarHoja(); });
+    $('cerrar').addEventListener('click', cerrarHoja);
+    $('abrir-abono').addEventListener('click', () => { $('form-abono').classList.remove('oculto'); $('abrir-abono').classList.add('oculto'); $('abono-monto').focus(); });
+    formatoCOPEnVivo($('abono-monto'));
+    $('form-abono').querySelectorAll('[data-medio]').forEach((b) => b.addEventListener('click', () => {
+      $('form-abono').querySelectorAll('[data-medio]').forEach((x) => x.classList.toggle('activo', x === b));
+    }));
+    $('form-abono').addEventListener('submit', (ev) => { ev.preventDefault(); registrarAbono(r); });
+  }
+
+  async function registrarAbono(r) {
+    const error = $('abono-error');
+    ocultarError(error);
+    const monto = parsearCOP($('abono-monto').value);
+    const medio = $('form-abono').querySelector('[data-medio].activo')?.dataset.medio;
+    const fecha = $('abono-fecha').value || hoy;
+    const nota = $('abono-nota').value.trim();
+    if (monto <= 0) { mostrarError(error, 'Escribe el monto del abono.'); return; }
+    if (!medio) { mostrarError(error, 'Elige el medio de pago.'); return; }
+    if (r.saldo != null && monto > r.saldo
+      && !confirm(`El abono (${formatearCOP(monto)}) supera el saldo (${formatearCOP(r.saldo)}). ¿Registrar así?`)) return;
+    const boton = $('guardar-abono');
+    boton.disabled = true;
+    boton.textContent = 'Guardando…';
+    try {
+      const respuesta = await api('/api/pagos', { method: 'POST', body: { reservaId: r.id, monto, medio, fecha, nota } });
+      r.pagos.push(respuesta.pago);
+      Object.assign(r, respuesta.resumen);
+      dibujar();
+      abrirDetalle(r.id);
+    } catch (e) {
+      if (e.status === 401) { pedirPin(); return; }
+      mostrarError(error, e.message);
+      boton.disabled = false;
+      boton.textContent = 'Guardar abono';
+    }
+  }
+
+  asegurarPin({ raiz: $('pin'), alListo: iniciar });
+</script>
+</body>
+</html>
