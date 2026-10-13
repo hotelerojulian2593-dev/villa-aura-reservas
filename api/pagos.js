@@ -1,4 +1,4 @@
-import { clienteDesdeEnv, AirtableError } from '../lib/airtable.js';
+import { clienteDesdeEnv, esNoEncontrado } from '../lib/airtable.js';
 import {
   tablasDesdeEnv, aReservaApi, aPagoApi, camposPagoNuevo, camposCambiosPago, cargarPagosPorIds, ESTADOS,
 } from '../lib/reservas.js';
@@ -21,7 +21,7 @@ export function crearHandler(deps = {}) {
     try {
       return await cliente.obtener(tablas.pagos, id);
     } catch (e) {
-      if (e instanceof AirtableError && e.status === 404) { responder(res, 404, { ok: false, error: 'El abono no existe.' }); return null; }
+      if (esNoEncontrado(e)) { responder(res, 404, { ok: false, error: 'El abono no existe.' }); return null; }
       throw e;
     }
   }

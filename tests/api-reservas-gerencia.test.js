@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { crearHandler } from '../api/reservas.js';
 import { crearClienteFalso, sembrarDemo } from '../lib/airtable-falso.js';
 import { reiniciarFallos } from '../lib/pin.js';
+import { AirtableError } from '../lib/airtable.js';
 import { hoyBogota, sumarDias } from '../public/js/fechas.js';
 import { crearReq, crearRes } from './ayudas.js';
 
@@ -38,6 +39,13 @@ describe('PATCH /api/reservas — permisos y forma', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe('Indica cambios o cancelar, no ambos.');
     expect((await cliente.obtener('Reservas', ids.a)).fields['Estado']).toBe('Confirmado');
+  });
+  it('404 también cuando Airtable responde 403 "modelo no encontrado" (id inexistente real)', async () => {
+    const roto = { ...cliente, obtener: async () => { throw new AirtableError('Invalid permissions, or the requested model was not found.', 403, { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } }); } };
+    const res = crearRes();
+    await crearHandler({ cliente: roto, env: ENV, dormir: vi.fn(async () => {}) })(req({ method: 'PATCH', body: { id: 'recAAAAAAAAAAAAAA', cambios: { personas: 2 } } }), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ ok: false, error: 'La reserva no existe.' });
   });
   it('400 sin cambios; 404 si la reserva no existe', async () => {
     expect((await patch({ id: ids.a, cambios: {} })).body.error).toBe('No hay cambios.');

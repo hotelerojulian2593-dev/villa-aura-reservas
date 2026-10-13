@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { crearCliente, clienteDesdeEnv, AirtableError } from '../lib/airtable.js';
+import { crearCliente, clienteDesdeEnv, AirtableError, esNoEncontrado } from '../lib/airtable.js';
 
 const respuesta = (status, cuerpo) => ({ ok: status >= 200 && status < 300, status, json: async () => cuerpo });
 
@@ -94,5 +94,15 @@ describe('clienteDesdeEnv', () => {
   it('exige token y base', () => {
     expect(() => clienteDesdeEnv({})).toThrow(AirtableError);
     expect(clienteDesdeEnv({ AIRTABLE_TOKEN: 't', AIRTABLE_BASE_ID: 'app1' })).toHaveProperty('listar');
+  });
+});
+
+describe('esNoEncontrado', () => {
+  it('404, o 403 INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND (así responde Airtable a un id inexistente)', () => {
+    expect(esNoEncontrado(new AirtableError('x', 404))).toBe(true);
+    expect(esNoEncontrado(new AirtableError('x', 403, { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } }))).toBe(true);
+    expect(esNoEncontrado(new AirtableError('x', 403, { error: { type: 'OTRO' } }))).toBe(false);
+    expect(esNoEncontrado(new AirtableError('x', 503))).toBe(false);
+    expect(esNoEncontrado(new Error('x'))).toBe(false);
   });
 });

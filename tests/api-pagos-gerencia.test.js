@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { crearHandler } from '../api/pagos.js';
 import { crearClienteFalso, sembrarDemo } from '../lib/airtable-falso.js';
 import { reiniciarFallos } from '../lib/pin.js';
+import { AirtableError } from '../lib/airtable.js';
 import { hoyBogota, sumarDias } from '../public/js/fechas.js';
 import { crearReq, crearRes } from './ayudas.js';
 
@@ -33,6 +34,13 @@ describe('PATCH /api/pagos — permisos y forma', () => {
     const res = await patch({ id: pagoA, cambios: { monto: 1 } }, null);
     expect(res.statusCode).toBe(401);
     expect((await cliente.obtener('Pagos', pagoA)).fields['Monto']).toBe(530000);
+  });
+  it('404 "El abono no existe." también con el 403 de Airtable para ids inexistentes', async () => {
+    const roto = { ...cliente, obtener: async () => { throw new AirtableError('Invalid permissions, or the requested model was not found.', 403, { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } }); } };
+    const res = crearRes();
+    await crearHandler({ cliente: roto, env: ENV, dormir: vi.fn(async () => {}) })(req({ method: 'PATCH', body: { id: 'recAAAAAAAAAAAAAA', anular: { motivo: 'x' } } }), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ ok: false, error: 'El abono no existe.' });
   });
   it('400 ambos; 400 sin cambios; 404 abono inexistente', async () => {
     expect((await patch({ id: pagoA, cambios: { monto: 1 }, anular: { motivo: 'x' } })).body.error).toBe('Indica cambios o anular, no ambos.');
