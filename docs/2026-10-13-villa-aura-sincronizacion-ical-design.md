@@ -1,7 +1,7 @@
 # Villa Aura — Sincronización de disponibilidad con Airbnb (y Booking.com) por iCal (diseño)
 
 **Fecha:** 2026-10-13
-**Estado:** aprobado en conversación; pendiente revisión del documento
+**Estado:** implementado el 2026-10-13. **Ajuste del mismo día (plan Free de Airtable, 1.000 llamadas/mes):** sin monitores de 5 min; el calendario pide sincronizar como máximo una vez por hora (`siViejo=60`, recordado en `localStorage`), `GET /api/reservas` ya no devuelve `sincronizacion` ni lee `Canales`, y al volver a la pestaña solo recarga si pasaron 5 min. Lo demás sigue vigente.
 **Base:** `2026-10-12-villa-aura-mini-pms-vercel-design.md` (sistema en producción) y `2026-10-13-villa-aura-edicion-reservas-design.md` (gerencia, historial). Este documento solo describe lo que cambia.
 
 ---

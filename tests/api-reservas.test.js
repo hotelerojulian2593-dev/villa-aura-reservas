@@ -110,19 +110,16 @@ describe('POST', () => {
   });
 });
 
-describe('GET — estado de sincronización', () => {
-  it('incluye los canales activos; si Canales falla, sigue respondiendo con lista vacía', async () => {
-    const res = await llamar(crearReq({ query: { desde: hoy, hasta: d(30) } }));
+describe('GET — plan Free de Airtable: cada llamada cuenta', () => {
+  it('no lee la tabla Canales ni devuelve sincronizacion; solo Reservas y Pagos', async () => {
+    const tablasLeidas = [];
+    const contado = { ...cliente, listar: (tabla, opciones) => { tablasLeidas.push(tabla); return cliente.listar(tabla, opciones); } };
+    const res = crearRes();
+    await crearHandler({ cliente: contado, env: ENV, dormir })(crearReq({ query: { desde: hoy, hasta: d(30) } }), res);
     expect(res.statusCode).toBe(200);
-    expect(res.body.sincronizacion).toEqual([{ canal: 'Airbnb', ultimaLectura: null, ultimoResultado: '' }]);
+    expect(res.body.sincronizacion).toBeUndefined();
     expect(res.body.reservas[0].fuente).toBe('Directo');
-    const roto = { ...cliente, listar: (tabla, opciones) => (tabla === 'Canales'
-      ? Promise.reject(new AirtableError('Invalid permissions, or the requested model was not found.', 403, { error: { type: 'INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND' } }))
-      : cliente.listar(tabla, opciones)) };
-    const res2 = crearRes();
-    await crearHandler({ cliente: roto, env: ENV, dormir })(crearReq({ query: { desde: hoy, hasta: d(30) } }), res2);
-    expect(res2.statusCode).toBe(200);
-    expect(res2.body.sincronizacion).toEqual([]);
-    expect(res2.body.reservas.length).toBeGreaterThan(0);
+    expect(tablasLeidas).not.toContain('Canales');
+    expect(tablasLeidas.filter((t) => t === 'Reservas')).toHaveLength(1);
   });
 });

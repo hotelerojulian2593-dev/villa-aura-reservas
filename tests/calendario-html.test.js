@@ -13,7 +13,10 @@ describe('calendario.html — bloque de gerencia', () => {
     expect(html).toContain('id="canales"');
     expect(html).toContain('id="canales-cuerpo"');
     expect(html).toContain('Sincronizar ahora');
-    expect(html).toContain("'/api/sincronizar?siViejo=10'");
+    expect(html).toContain("'/api/sincronizar?siViejo=60'");
+    expect(html).not.toContain('siViejo=10');
+    expect(html).toContain("va_sync_lectura");
+    expect(html).toContain('Date.now() - ultimaCarga > 5 * 60000');
     expect(html).toContain("'/api/sincronizar?estado=1'");
     expect(html).toContain("'/api/sincronizar?forzar=1'");
     expect(html).toContain("import { esDeCanal } from '/js/canales.js'");

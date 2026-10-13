@@ -152,8 +152,8 @@
   let cargando = false;
   let gerenciaActiva = Boolean(obtenerPinGerencia());
   let hojaAbierta = null;
-  let sincronizacion = [];
   let choques = new Set();
+  let ultimaCarga = 0;
 
   function iniciar() {
     $('app').classList.remove('oculto');
@@ -163,7 +163,8 @@
     $('reintentar').addEventListener('click', cargar);
     $('canceladas').addEventListener('toggle', () => { if ($('canceladas').open) cargarCanceladas(); });
     $('canales').addEventListener('toggle', () => { if ($('canales').open) cargarCanales(); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cargar(); });
+    // Al volver a la pestaña recarga solo si pasaron 5 min (plan Free de Airtable: cada llamada cuenta).
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - ultimaCarga > 5 * 60000) cargar(); });
     actualizarBloqueCanceladas();
     cargar();
   }
@@ -220,7 +221,8 @@
     $('lista').innerHTML = '';
     ocultarError($('falla'));
     try {
-      ({ reservas, sincronizacion = [] } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
+      ({ reservas } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
+      ultimaCarga = Date.now();
       dibujar();
       if ($('canceladas').open) cargarCanceladas();
       sincronizarSiViejo();
@@ -249,15 +251,22 @@
     }
   }
 
-  // Al abrir el calendario: si la última lectura de los canales tiene más de 10 min, el servidor
-  // sincroniza; si hubo cambios se recarga. Si falla, las señoras no ven nada; gerencia lo ve en Canales.
+  // Plan Free de Airtable: cada llamada cuenta. Al abrir el calendario solo se pide sincronizar los
+  // canales si hace más de una hora de la última lectura conocida, que se recuerda en este celular.
+  // Si hubo cambios se recarga. Si falla, las señoras no ven nada; gerencia lo ve en Canales.
+  const CLAVE_SYNC = 'va_sync_lectura';
+  const HORA_MS = 60 * 60000;
+  const lecturaConocida = () => { try { return Number(localStorage.getItem(CLAVE_SYNC)) || 0; } catch { return 0; } };
+  const recordarLectura = (ms) => { try { localStorage.setItem(CLAVE_SYNC, String(ms)); } catch { /* nada */ } };
   async function sincronizarSiViejo() {
-    if (!sincronizacion.length) return;
+    if (Date.now() - lecturaConocida() < HORA_MS) return;
     try {
-      const r = await api('/api/sincronizar?siViejo=10');
+      const r = await api('/api/sincronizar?siViejo=60');
+      const lecturas = (r.canales ?? []).map((c) => new Date(c.ultimaLectura ?? 0).getTime() || 0);
+      recordarLectura(r.omitido && lecturas.length ? Math.min(...lecturas) : Date.now());
       if (r.omitido) return;
       if ((r.canales ?? []).reduce((s, c) => s + (c.nuevas ?? 0) + (c.cambiadas ?? 0) + (c.canceladas ?? 0), 0) > 0) cargar();
-    } catch { /* silencio para las señoras */ }
+    } catch { recordarLectura(Date.now() - HORA_MS + 15 * 60000); /* reintenta en 15 min */ }
   }
 
   function haceCuanto(iso) {

@@ -1,7 +1,7 @@
 import { clienteDesdeEnv } from '../lib/airtable.js';
 import {
   tablasDesdeEnv, cargarReservasConPagos, listarReservasEnRango, aReservaApi, cargarPagosPorIds,
-  camposReservaNueva, camposPagoNuevo, camposCambiosReserva, ESTADOS, listarCanalesActivos, estadoCanal, FUENTES,
+  camposReservaNueva, camposPagoNuevo, camposCambiosReserva, ESTADOS, FUENTES,
 } from '../lib/reservas.js';
 import { validarRango, validarReservaNueva, validarCambiosReserva, validarCancelacion } from '../lib/validar.js';
 import { responder, exigirPin, exigirPinGerencia, manejarError, sinCache } from '../lib/http.js';
@@ -23,16 +23,6 @@ async function reservaCompleta(cliente, tablas, id) {
   const reg = await cliente.obtener(tablas.reservas, id);
   const pagos = await cargarPagosPorIds(cliente, tablas.pagos, reg.fields['Pagos'] ?? []);
   return aReservaApi(reg, pagos);
-}
-
-// El calendario nunca se cae por la tabla Canales: si falla, la lista va vacía.
-async function estadoSincronizacion(cliente, tablas) {
-  try {
-    return (await listarCanalesActivos(cliente, tablas)).map(estadoCanal);
-  } catch (e) {
-    console.error('[canales]', e.message);
-    return [];
-  }
 }
 
 export function crearHandler(deps = {}) {
@@ -119,7 +109,8 @@ export function crearHandler(deps = {}) {
         const v = validarRango(req.query ?? {});
         if (!v.ok) return responder(res, 400, { ok: false, error: v.error });
         const reservas = await cargarReservasConPagos(cliente, tablas, v.datos.desde, v.datos.hasta, { incluirCanceladas });
-        return responder(res, 200, { ok: true, ...v.datos, reservas, sincronizacion: await estadoSincronizacion(cliente, tablas) });
+        // Plan Free de Airtable (1.000 llamadas/mes): el GET no lee Canales; el estado lo pide gerencia con /api/sincronizar?estado=1.
+        return responder(res, 200, { ok: true, ...v.datos, reservas });
       }
 
       if (req.method === 'PATCH') {
