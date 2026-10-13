@@ -68,6 +68,13 @@
     #canceladas { margin-top: 18px; }
     #canceladas summary { cursor: pointer; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gris); margin-bottom: 10px; }
     .cancelada { opacity: .85; }
+    #canales { margin-top: 18px; }
+    #canales summary { cursor: pointer; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gris); margin-bottom: 10px; }
+    #canales-cuerpo { display: flex; flex-direction: column; gap: 10px; }
+    .choque { color: var(--rojo); font-size: 12px; font-weight: 600; }
+    .aviso--rojo { background: #FDECEC; border-color: #F2B8B5; color: var(--rojo); }
+    .canal--error { color: var(--rojo); font-weight: 600; }
+    .enlace-ical { font-size: 11px; word-break: break-all; background: var(--fondo); border-radius: 8px; padding: 8px 10px; }
     /* El calendario aprovecha el ancho en pantallas grandes (el formulario conserva 560 px) */
     .contenedor { max-width: 1200px; }
     @media (min-width: 900px) {
@@ -122,6 +129,7 @@
   <h3 class="seccion">Próximas llegadas</h3>
   <div class="lista" id="lista"></div>
   <details id="canceladas" class="oculto"><summary>Canceladas del mes</summary><div class="lista" id="lista-canceladas"></div></details>
+  <details id="canales" class="oculto"><summary>Canales (Airbnb / Booking.com)</summary><div id="canales-cuerpo"></div></details>
 </main>
 
 <div id="hoja"></div>
@@ -132,8 +140,9 @@
   import { hoyBogota, rangoMes, mesDeISO, nombreMes, esFinDeSemana, diaSemana, fechaCorta, DIAS_CORTOS, sumarDias } from '/js/fechas.js';
   import { formatearCOP, parsearCOP } from '/js/dinero.js';
   import { HABITACIONES, FULL_HOUSE, OPCIONES_HABITACION } from '/js/disponibilidad.js';
+  import { esDeCanal } from '/js/canales.js';
   import { kpisMes } from '/js/pagos.js';
-  import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago } from '/js/calendario-logica.js';
+  import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque } from '/js/calendario-logica.js';
 
   const MEDIOS = ['Nequi', 'Bancolombia', 'Daviplata', 'Efectivo', 'Otro'];
   const $ = (id) => document.getElementById(id);
@@ -143,6 +152,8 @@
   let cargando = false;
   let gerenciaActiva = Boolean(obtenerPinGerencia());
   let hojaAbierta = null;
+  let sincronizacion = [];
+  let choques = new Set();
 
   function iniciar() {
     $('app').classList.remove('oculto');
@@ -151,6 +162,7 @@
     $('actualizar').addEventListener('click', cargar);
     $('reintentar').addEventListener('click', cargar);
     $('canceladas').addEventListener('toggle', () => { if ($('canceladas').open) cargarCanceladas(); });
+    $('canales').addEventListener('toggle', () => { if ($('canales').open) cargarCanales(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cargar(); });
     actualizarBloqueCanceladas();
     cargar();
@@ -177,8 +189,10 @@
   }
 
   function actualizarBloqueCanceladas() {
-    $('canceladas').classList.toggle('oculto', !gerenciaActiva);
-    if (!gerenciaActiva) $('canceladas').open = false;
+    for (const id of ['canceladas', 'canales']) {
+      $(id).classList.toggle('oculto', !gerenciaActiva);
+      if (!gerenciaActiva) $(id).open = false;
+    }
   }
 
   // Si la API rechaza el PIN de gerencia, app.js ya lo borró: volvemos al modo normal.
@@ -206,9 +220,10 @@
     $('lista').innerHTML = '';
     ocultarError($('falla'));
     try {
-      ({ reservas } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
+      ({ reservas, sincronizacion = [] } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
       dibujar();
       if ($('canceladas').open) cargarCanceladas();
+      sincronizarSiViejo();
     } catch (e) {
       if (e.status === 401) pedirPin();
       else { $('falla-texto').textContent = e.message; $('falla').classList.add('visible'); $('grilla').innerHTML = ''; $('kpis').innerHTML = ''; }
@@ -234,7 +249,75 @@
     }
   }
 
+  // Al abrir el calendario: si la última lectura de los canales tiene más de 10 min, el servidor
+  // sincroniza; si hubo cambios se recarga. Si falla, las señoras no ven nada; gerencia lo ve en Canales.
+  async function sincronizarSiViejo() {
+    if (!sincronizacion.length) return;
+    try {
+      const r = await api('/api/sincronizar?siViejo=10');
+      if (r.omitido) return;
+      if ((r.canales ?? []).reduce((s, c) => s + (c.nuevas ?? 0) + (c.cambiadas ?? 0) + (c.canceladas ?? 0), 0) > 0) cargar();
+    } catch { /* silencio para las señoras */ }
+  }
+
+  function haceCuanto(iso) {
+    if (!iso) return 'nunca';
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (min < 1) return 'hace un momento';
+    if (min < 60) return `hace ${min} min`;
+    const horas = Math.round(min / 60);
+    return horas < 48 ? `hace ${horas} h` : `hace ${Math.round(horas / 24)} días`;
+  }
+
+  function dibujarCanales(canales, enlaceIcal) {
+    const filas = canales.length ? canales.map((c) => {
+      const min = c.ultimaLectura ? (Date.now() - new Date(c.ultimaLectura).getTime()) / 60000 : Infinity;
+      const mal = /^error/.test(c.ultimoResultado ?? '') || min > 30;
+      return `<div class="tarjeta"><strong>${escapar(c.canal)}</strong>
+        <div class="reserva__sub">Última lectura: ${haceCuanto(c.ultimaLectura)}</div>
+        <div class="reserva__sub${mal ? ' canal--error' : ''}">${escapar(c.ultimoResultado || 'sin lecturas todavía')}</div></div>`;
+    }).join('') : '<div class="tarjeta vacio">Sin canales activos. Se activan en la tabla Canales de Airtable.</div>';
+    $('canales-cuerpo').innerHTML = `${filas}
+      <button type="button" class="boton boton--secundario" id="sincronizar-ahora">Sincronizar ahora</button>
+      <div class="error" id="canales-error" role="alert"></div>
+      ${enlaceIcal ? `<p class="reserva__sub">Enlace para Airbnb / Booking.com (Calendario → Disponibilidad → Conectar calendarios → Importar):</p>
+      <div class="enlace-ical">${escapar(enlaceIcal)}</div>
+      <button type="button" class="boton boton--secundario boton--chico" id="copiar-ical">Copiar enlace</button>` : ''}`;
+    $('sincronizar-ahora').addEventListener('click', sincronizarAhora);
+    if ($('copiar-ical')) {
+      $('copiar-ical').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(enlaceIcal); mostrarAviso('Enlace copiado.'); } catch { /* queda visible para copiarlo a mano */ }
+      });
+    }
+  }
+
+  async function cargarCanales() {
+    $('canales-cuerpo').innerHTML = '<div class="tarjeta esqueleto"></div>';
+    try {
+      const r = await api('/api/sincronizar?estado=1', { gerencia: true });
+      dibujarCanales(r.canales ?? [], r.enlaceIcal);
+    } catch (e) {
+      if (!manejarErrorGerencia(e, null)) $('canales-cuerpo').innerHTML = `<div class="error visible">${escapar(e.message)}</div>`;
+    }
+  }
+
+  async function sincronizarAhora() {
+    const boton = $('sincronizar-ahora');
+    boton.disabled = true;
+    boton.textContent = 'Sincronizando…';
+    try {
+      const r = await api('/api/sincronizar?forzar=1', { method: 'POST', gerencia: true });
+      const total = (r.canales ?? []).reduce((s, c) => s + (c.nuevas ?? 0) + (c.cambiadas ?? 0) + (c.canceladas ?? 0), 0);
+      mostrarAviso(total ? `Sincronizado: ${total} cambio(s).` : 'Sincronizado: sin cambios.');
+      await cargar();
+      cargarCanales();
+    } catch (e) {
+      if (!manejarErrorGerencia(e, null)) { mostrarError($('canales-error'), e.message); boton.disabled = false; boton.textContent = 'Sincronizar ahora'; }
+    }
+  }
+
   function dibujar() {
+    choques = idsConChoque(reservas);
     const { desde, hasta } = rangoMes(anio, mes);
     dibujarKpis(desde, hasta);
     dibujarGrilla(desde, hasta);
@@ -272,7 +355,7 @@
         while (d < b.diaInicio) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
         const siguiente = barras.find((x) => x.b.diaInicio > b.diaInicio)?.b.diaInicio ?? dias + 1;
         const span = Math.min(b.span, siguiente - b.diaInicio, dias + 1 - b.diaInicio);
-        html += `<td colspan="${span}" class="celda-barra"><button type="button" class="barra barra--${colorEstado(r)}${b.cortadaIzq ? ' cortada-izq' : ''}${b.cortadaDer ? ' cortada-der' : ''}" data-id="${r.id}" title="${escapar(r.huesped)}">${escapar(r.huesped)}</button></td>`;
+        html += `<td colspan="${span}" class="celda-barra"><button type="button" class="barra barra--${colorEstado(r)}${b.cortadaIzq ? ' cortada-izq' : ''}${b.cortadaDer ? ' cortada-der' : ''}" data-id="${r.id}" title="${escapar(r.huesped)}">${choques.has(r.id) ? '⚠ ' : ''}${escapar(r.huesped)}</button></td>`;
         d += span;
       }
       while (d <= dias) { html += `<td class="${claseDia(isoDia(d))}"></td>`; d += 1; }
@@ -285,12 +368,19 @@
     if (columnaHoy) $('grilla').scrollLeft = Math.max(0, columnaHoy.offsetLeft - 130);
   }
 
+  const etiquetaEstado = (r) => `<span class="estado estado--${colorEstado(r)}">${escapar(esDeCanal(r) ? r.fuente : r.estado)}</span>`;
+  const personasTxt = (r) => (r.personas ? ` · ${r.personas} pers.` : '');
+
   function tarjeta(r) {
+    const pago = esDeCanal(r)
+      ? `<div class="reserva__sub">Cobro en ${escapar(r.fuente)}</div>`
+      : `<div class="pago"><div class="pago__barra"><span style="width:${porcentajePago(r)}%"></span></div><span class="pago__txt pago--${r.estadoPago}">${escapar(etiquetaPago(r))}</span></div>`;
     return `<button type="button" class="tarjeta reserva" data-id="${r.id}">
-      <div class="reserva__cab"><strong>${escapar(r.huesped)}</strong><span class="estado estado--${colorEstado(r)}">${escapar(r.estado)}</span></div>
-      <div class="reserva__sub">${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'} · ${r.personas} pers.</div>
+      <div class="reserva__cab"><strong>${escapar(r.huesped)}</strong>${etiquetaEstado(r)}</div>
+      <div class="reserva__sub">${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'}${personasTxt(r)}</div>
       <div class="reserva__sub">${escapar(r.habitaciones.join(' · '))}</div>
-      <div class="pago"><div class="pago__barra"><span style="width:${porcentajePago(r)}%"></span></div><span class="pago__txt pago--${r.estadoPago}">${escapar(etiquetaPago(r))}</span></div>
+      ${choques.has(r.id) ? '<div class="choque">⚠ Choque con otra reserva</div>' : ''}
+      ${pago}
     </button>`;
   }
 
@@ -326,17 +416,19 @@
   }
 
   function bloqueGerencia(r) {
+    const canal = esDeCanal(r);
     return `<div class="gerencia">
       <h3 class="seccion">Gerencia</h3>
+      ${canal ? `<p class="reserva__sub">Reserva de ${escapar(r.fuente)}: las fechas, las habitaciones y la cancelación se manejan en ${escapar(r.fuente)}; al siguiente ciclo se reflejan aquí.</p>` : ''}
       <button type="button" class="boton boton--secundario" id="g-editar">Editar reserva</button>
       <form id="g-form-editar" class="form-abono oculto">
         <div class="campo"><label for="g-huesped">Nombre del huésped</label><input class="entrada" id="g-huesped" value="${escapar(r.huesped)}"></div>
         <div class="campo"><label for="g-telefono">WhatsApp / Teléfono</label><input class="entrada" id="g-telefono" value="${escapar(r.telefono)}"></div>
-        <div class="fila-2">
+        ${canal ? '' : `<div class="fila-2">
           <div class="campo"><label for="g-entrada">Llegada</label><input class="entrada" type="date" id="g-entrada" value="${r.entrada ?? ''}"></div>
           <div class="campo"><label for="g-salida">Salida</label><input class="entrada" type="date" id="g-salida" value="${r.salida ?? ''}"></div>
         </div>
-        <div class="campo"><span class="etiqueta">Habitación(es)</span><div class="chips">${chipsHabitaciones(r.habitaciones)}</div></div>
+        <div class="campo"><span class="etiqueta">Habitación(es)</span><div class="chips">${chipsHabitaciones(r.habitaciones)}</div></div>`}
         <div class="fila-2">
           <div class="campo"><label for="g-personas">Personas</label><input class="entrada" type="number" id="g-personas" min="1" max="60" inputmode="numeric" value="${r.personas || ''}"></div>
           <div class="campo"><label for="g-valor">Valor total</label><input class="entrada" id="g-valor" inputmode="numeric" placeholder="$ 0" value="${r.valorTotal == null ? '' : formatearCOP(r.valorTotal)}"></div>
@@ -345,12 +437,12 @@
         <div class="error" id="g-error" role="alert"></div>
         <button type="submit" class="boton" id="g-guardar">Guardar cambios</button>
       </form>
-      <button type="button" class="boton boton--secundario" id="g-cancelar">Cancelar reserva</button>
+      ${canal ? '' : `<button type="button" class="boton boton--secundario" id="g-cancelar">Cancelar reserva</button>
       <form id="g-form-cancelar" class="form-abono oculto">
         <div class="campo"><label for="g-motivo">Motivo</label><input class="entrada" id="g-motivo" placeholder="Ej.: el cliente no viajó"></div>
         <div class="error" id="g-cancel-error" role="alert"></div>
         <button type="submit" class="boton boton--rojo" id="g-confirmar-cancelar">Confirmar cancelación</button>
-      </form>
+      </form>`}
       <details class="historial"><summary>Historial</summary><pre>${escapar(r.historial || 'Sin cambios registrados.')}</pre></details>
       <button type="button" class="boton boton--secundario" id="g-salir">Salir de gerencia</button>
     </div>`;
@@ -365,27 +457,12 @@
     </div>`;
   }
 
-  function abrirDetalle(id) {
-    const r = reservas.find((x) => x.id === id);
-    if (!r) return;
-    hojaAbierta = id;
-    const wa = telefonoWa(r.telefono);
+  function bloquePagos(r) {
+    if (esDeCanal(r)) {
+      return `<p class="detalle__notas">Cobro a través de ${escapar(r.fuente)}. Los datos del huésped y el pago están en la app de ${escapar(r.fuente)}.</p>`;
+    }
     const saldoSugerido = r.saldo > 0 ? formatearCOP(r.saldo) : '';
-    $('hoja').innerHTML = `
-      <div class="hoja-fondo" id="hoja-fondo">
-        <div class="hoja" role="dialog" aria-modal="true" aria-label="Detalle de la reserva">
-          <div class="hoja__asa"></div>
-          <div class="detalle__cab">
-            <div>
-              <h2>${escapar(r.huesped)}</h2>
-              <p>${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'} · ${r.personas} pers.</p>
-              <p>${escapar(r.habitaciones.join(' · '))}</p>
-            </div>
-            <span class="estado estado--${colorEstado(r)}">${escapar(r.estado)}</span>
-          </div>
-          ${wa ? `<a class="boton boton--secundario boton--chico" href="${wa}" target="_blank" rel="noopener">WhatsApp · ${escapar(r.telefono)}</a>` : `<span class="reserva__sub">${escapar(r.telefono)}</span>`}
-          ${r.notas ? `<p class="detalle__notas">${escapar(r.notas)}</p>` : ''}
-          <div class="totales">
+    return `<div class="totales">
             <div><span>Valor total</span><strong>${r.valorTotal == null ? 'Sin definir' : formatearCOP(r.valorTotal)}</strong></div>
             <div><span>Pagado</span><strong>${formatearCOP(r.pagado)}</strong></div>
             <div><span>Saldo</span><strong class="pago--${r.estadoPago}">${r.saldo == null ? '—' : formatearCOP(r.saldo)}</strong></div>
@@ -402,7 +479,31 @@
             </div>
             <div class="error" id="abono-error" role="alert"></div>
             <button type="submit" class="boton boton--dorado" id="guardar-abono">Guardar abono</button>
-          </form>
+          </form>`;
+  }
+
+  function abrirDetalle(id) {
+    const r = reservas.find((x) => x.id === id);
+    if (!r) return;
+    hojaAbierta = id;
+    const wa = telefonoWa(r.telefono);
+    $('hoja').innerHTML = `
+      <div class="hoja-fondo" id="hoja-fondo">
+        <div class="hoja" role="dialog" aria-modal="true" aria-label="Detalle de la reserva">
+          <div class="hoja__asa"></div>
+          <div class="detalle__cab">
+            <div>
+              <h2>${escapar(r.huesped)}</h2>
+              <p>${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${r.noches} ${r.noches === 1 ? 'noche' : 'noches'}${personasTxt(r)}</p>
+              <p>${escapar(r.habitaciones.join(' · '))}</p>
+            </div>
+            ${etiquetaEstado(r)}
+          </div>
+          ${choques.has(r.id) ? '<div class="aviso aviso--rojo">⚠ Choca con otra reserva activa. Gerencia decide cuál se cancela: la directa aquí, la del canal en su plataforma.</div>' : ''}
+          ${wa ? `<a class="boton boton--secundario boton--chico" href="${wa}" target="_blank" rel="noopener">WhatsApp · ${escapar(r.telefono)}</a>` : (r.telefono ? `<span class="reserva__sub">${escapar(r.telefono)}</span>` : '')}
+          ${esDeCanal(r) && r.enlaceCanal ? `<a class="boton boton--secundario boton--chico" href="${escapar(r.enlaceCanal)}" target="_blank" rel="noopener">Ver en ${escapar(r.fuente)}</a>` : ''}
+          ${r.notas ? `<p class="detalle__notas">${escapar(r.notas)}</p>` : ''}
+          ${bloquePagos(r)}
           <button type="button" class="boton boton--secundario" id="btn-gerencia">${gerenciaActiva ? 'Gerencia ▾' : 'Gerencia'}</button>
           <div id="gerencia" class="${gerenciaActiva ? '' : 'oculto'}">${gerenciaActiva ? bloqueGerencia(r) : ''}</div>
           <button type="button" class="boton boton--secundario" id="cerrar">Cerrar</button>
@@ -410,10 +511,12 @@
       </div>`;
     $('hoja-fondo').addEventListener('click', (ev) => { if (ev.target === $('hoja-fondo')) cerrarHoja(); });
     $('cerrar').addEventListener('click', cerrarHoja);
-    $('abrir-abono').addEventListener('click', () => { $('form-abono').classList.remove('oculto'); $('abrir-abono').classList.add('oculto'); $('abono-monto').focus(); });
-    formatoCOPEnVivo($('abono-monto'));
-    conectarChipsMedio('nuevo');
-    $('form-abono').addEventListener('submit', (ev) => { ev.preventDefault(); registrarAbono(r); });
+    if ($('abrir-abono')) {
+      $('abrir-abono').addEventListener('click', () => { $('form-abono').classList.remove('oculto'); $('abrir-abono').classList.add('oculto'); $('abono-monto').focus(); });
+      formatoCOPEnVivo($('abono-monto'));
+      conectarChipsMedio('nuevo');
+      $('form-abono').addEventListener('submit', (ev) => { ev.preventDefault(); registrarAbono(r); });
+    }
     $('btn-gerencia').addEventListener('click', () => alternarGerencia(r));
     if (gerenciaActiva) conectarGerencia(r);
   }
@@ -452,7 +555,7 @@
 
   function conectarGerencia(r) {
     $('g-editar').addEventListener('click', () => $('g-form-editar').classList.toggle('oculto'));
-    $('g-cancelar').addEventListener('click', () => $('g-form-cancelar').classList.toggle('oculto'));
+    if ($('g-cancelar')) $('g-cancelar').addEventListener('click', () => $('g-form-cancelar').classList.toggle('oculto'));
     // Olvida el PIN de gerencia en este dispositivo (p. ej. si se usó el celular de las señoras).
     $('g-salir').addEventListener('click', () => {
       borrarPinGerencia();
@@ -464,7 +567,7 @@
     formatoCOPEnVivo($('g-valor'));
     document.querySelectorAll('[data-g-hab]').forEach((b) => b.addEventListener('click', () => alternarChipHabitacion(b)));
     $('g-form-editar').addEventListener('submit', (ev) => { ev.preventDefault(); guardarEdicion(r); });
-    $('g-form-cancelar').addEventListener('submit', (ev) => { ev.preventDefault(); cancelarReserva(r); });
+    if ($('g-form-cancelar')) $('g-form-cancelar').addEventListener('submit', (ev) => { ev.preventDefault(); cancelarReserva(r); });
     document.querySelectorAll('[data-corregir]').forEach((b) => b.addEventListener('click', () => mostrarFormCorregir(r, b.dataset.corregir)));
     document.querySelectorAll('[data-anular]').forEach((b) => b.addEventListener('click', () => mostrarFormAnular(r, b.dataset.anular)));
   }
@@ -490,11 +593,12 @@
   async function guardarEdicion(r) {
     const error = $('g-error');
     ocultarError(error);
-    const cambios = {
-      huesped: $('g-huesped').value.trim(), telefono: $('g-telefono').value.trim(),
-      entrada: $('g-entrada').value, salida: $('g-salida').value, habitaciones: habitacionesElegidas(),
-      personas: Number($('g-personas').value) || 0, notas: $('g-notas').value.trim(),
-    };
+    const cambios = { huesped: $('g-huesped').value.trim(), notas: $('g-notas').value.trim() };
+    const telefono = $('g-telefono').value.trim();
+    if (telefono || !esDeCanal(r)) cambios.telefono = telefono;
+    if ($('g-entrada')) Object.assign(cambios, { entrada: $('g-entrada').value, salida: $('g-salida').value, habitaciones: habitacionesElegidas() });
+    const personas = Number($('g-personas').value) || 0;
+    if (personas || !esDeCanal(r)) cambios.personas = personas;
     const valor = parsearCOP($('g-valor').value);
     if (valor > 0) cambios.valorTotal = valor;
     const boton = $('g-guardar');

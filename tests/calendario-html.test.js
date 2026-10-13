@@ -9,4 +9,17 @@ describe('calendario.html — bloque de gerencia', () => {
     expect(html).toContain('Salir de gerencia');
     expect(html).toMatch(/borrarPinGerencia\(\)/);
   });
+  it('sincroniza con los canales: sección Canales, lectura al abrir, forzar/estado y "Ver en"', () => {
+    expect(html).toContain('id="canales"');
+    expect(html).toContain('id="canales-cuerpo"');
+    expect(html).toContain('Sincronizar ahora');
+    expect(html).toContain("'/api/sincronizar?siViejo=10'");
+    expect(html).toContain("'/api/sincronizar?estado=1'");
+    expect(html).toContain("'/api/sincronizar?forzar=1'");
+    expect(html).toContain("import { esDeCanal } from '/js/canales.js'");
+    expect(html).toContain('choques = idsConChoque(reservas)');
+    expect(html).toContain('Ver en ${escapar(r.fuente)}');
+    expect(html).toContain('Cobro a través de ${escapar(r.fuente)}');
+    expect(html).toMatch(/aviso--rojo/);
+  });
 });
