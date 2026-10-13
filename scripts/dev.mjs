@@ -7,7 +7,7 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { crearClienteFalso, sembrarDemo } from '../lib/airtable-falso.js';
-import { hoyBogota } from '../public/js/fechas.js';
+import { hoyBogota, sumarDias } from '../public/js/fechas.js';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publico = path.join(raiz, 'public');
@@ -21,6 +21,15 @@ if (usarFalso) {
   deps.env = process.env;
   deps.cliente = crearClienteFalso();
   await sembrarDemo(deps.cliente, hoyBogota());
+  process.env.ICAL_CLAVE ||= 'demo'.repeat(8);
+  process.env.CRON_SECRET ||= 'cron-demo';
+  // Calendario de Airbnb simulado: una reserva real dentro de 20 días.
+  const hoy = hoyBogota();
+  const compacta = (iso) => iso.replace(/-/g, '');
+  const icsDemo = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Airbnb Inc//Hosting Calendar 0.8.8//EN', 'BEGIN:VEVENT',
+    `DTSTART;VALUE=DATE:${compacta(sumarDias(hoy, 20))}`, `DTEND;VALUE=DATE:${compacta(sumarDias(hoy, 22))}`, 'UID:demo-1@airbnb.com', 'SUMMARY:Reserved',
+    'DESCRIPTION:Reservation URL: https://www.airbnb.com/hosting/reservations/details/HMDEMO1\\nPhone Number (Last 4 Digits): 1234', 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
+  deps.fetchImpl = async () => ({ ok: true, status: 200, text: async () => icsDemo });
 }
 
 const tipos = {
@@ -70,16 +79,20 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${puerto}`);
   if (!url.pathname.startsWith('/api/')) return servirEstatico(url.pathname, res);
 
-  const nombre = url.pathname.slice(5).replace(/[^a-z-]/g, '');
+  const partes = url.pathname.slice(5).split('/');
+  let nombre = partes[0].replace(/[^a-z-]/g, '');
+  const extra = {};
+  if (nombre === 'ical' && partes[1]) { nombre = 'ical/[archivo]'; extra.archivo = decodeURIComponent(partes[1]); }
   let fn;
   try { fn = await manejadorDe(nombre); } catch {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: false, error: 'Endpoint no existe.' }));
   }
-  req.query = Object.fromEntries(url.searchParams);
+  req.query = { ...Object.fromEntries(url.searchParams), ...extra };
   req.body = await leerCuerpo(req);
   res.status = (codigo) => { res.statusCode = codigo; return res; };
   res.json = (objeto) => { res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(objeto)); return res; };
+  res.send = (cuerpo) => { if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'text/plain; charset=utf-8'); res.end(cuerpo); return res; };
   try {
     await fn(req, res);
   } catch (e) {
@@ -87,5 +100,5 @@ http.createServer(async (req, res) => {
     if (!res.headersSent) res.status(500).json({ ok: false, error: 'Error del servidor de desarrollo.' });
   }
 }).listen(puerto, () => {
-  console.log(`Villa Aura en http://localhost:${puerto} ${usarFalso ? '· Airtable FALSO (PIN 123456 · gerencia 654321)' : '· Airtable real (.env.local)'}`);
+  console.log(`Villa Aura en http://localhost:${puerto} ${usarFalso ? '· Airtable FALSO (PIN 123456 · gerencia 654321 · ical demodemo…)' : '· Airtable real (.env.local)'}`);
 });

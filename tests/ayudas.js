@@ -12,6 +12,7 @@ export function crearRes() {
     setHeader(clave, valor) { this.headers[clave] = valor; },
     status(codigo) { this.statusCode = codigo; return this; },
     json(cuerpo) { this.body = cuerpo; return this; },
+    send(cuerpo) { this.body = cuerpo; return this; },
   };
 }
 
