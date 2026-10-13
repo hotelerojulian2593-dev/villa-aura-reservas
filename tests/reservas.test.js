@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   formulaRango, formulaIds, aPagoApi, aReservaApi, cargarReservasConPagos, cargarPagosPorIds,
   camposReservaNueva, camposPagoNuevo, tablasDesdeEnv, ESTADOS, camposCambiosReserva, camposCambiosPago,
+  formulaCanal, aCanalApi, estadoCanal, FUENTES,
 } from '../lib/reservas.js';
 import { crearClienteFalso, sembrarDemo } from '../lib/airtable-falso.js';
 
@@ -51,7 +52,7 @@ describe('mapeo', () => {
     const datos = { huesped: 'Ana', telefono: '310', entrada: '2026-10-17', salida: '2026-10-19', habitaciones: ['La Rosaura'], personas: 4, valorTotal: 1060000, abono: { monto: 1 }, notas: '' };
     expect(camposReservaNueva(datos)).toEqual({
       'Huésped': 'Ana', 'Teléfono': '310', 'Fecha entrada': '2026-10-17', 'Fecha salida': '2026-10-19',
-      'Habitaciones': ['La Rosaura'], 'Personas': 4, 'Valor total': 1060000, 'Estado': 'Confirmado',
+      'Habitaciones': ['La Rosaura'], 'Personas': 4, 'Valor total': 1060000, 'Estado': 'Confirmado', 'Fuente': 'Directo',
     });
     expect(camposReservaNueva({ ...datos, abono: null, notas: 'tarde' })).toMatchObject({ 'Estado': 'Anticipo pendiente', 'Notas': 'tarde' });
     expect(camposPagoNuevo({ reservaId: 'recR', huesped: 'Ana', esPrimero: true, monto: 500, medio: 'Nequi', fecha: '2026-10-12', nota: '' }))
@@ -76,8 +77,8 @@ describe('mapeo', () => {
     expect(camposCambiosPago({ fecha: '2026-10-12', medio: 'Efectivo' })).toEqual({ 'Fecha': '2026-10-12', 'Medio': 'Efectivo' });
   });
   it('tablas por defecto y por env', () => {
-    expect(tablasDesdeEnv({})).toEqual({ reservas: 'Reservas', pagos: 'Pagos' });
-    expect(tablasDesdeEnv({ AIRTABLE_TABLA_RESERVAS: 'tbl1', AIRTABLE_TABLA_PAGOS: 'tbl2' })).toEqual({ reservas: 'tbl1', pagos: 'tbl2' });
+    expect(tablasDesdeEnv({})).toEqual({ reservas: 'Reservas', pagos: 'Pagos', canales: 'Canales' });
+    expect(tablasDesdeEnv({ AIRTABLE_TABLA_RESERVAS: 'tbl1', AIRTABLE_TABLA_PAGOS: 'tbl2', AIRTABLE_TABLA_CANALES: 'tbl3' })).toEqual({ reservas: 'tbl1', pagos: 'tbl2', canales: 'tbl3' });
     expect(ESTADOS.confirmado).toBe('Confirmado');
   });
 });
@@ -111,5 +112,27 @@ describe('cargarReservasConPagos', () => {
     const pagos = await cargarPagosPorIds(cliente, 'Pagos', ids);
     expect(pagos).toHaveLength(41);
     expect(cliente.listar).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('canales (sincronización)', () => {
+  it('formulaCanal filtra por Fuente y salida futura, incluidas canceladas; rechaza lo desconocido', () => {
+    expect(formulaCanal('Airbnb', '2026-10-13')).toBe("AND({Fuente} = 'Airbnb', IS_AFTER({Fecha salida}, DATETIME_PARSE('2026-10-13', 'YYYY-MM-DD')))");
+    expect(() => formulaCanal('Directo', '2026-10-13')).toThrow();
+    expect(() => formulaCanal("x' OR 1", '2026-10-13')).toThrow();
+    expect(() => formulaCanal('Airbnb', 'hoy')).toThrow();
+  });
+  it('aReservaApi expone fuente, uidCanal y enlaceCanal; Directo por defecto', () => {
+    const r = aReservaApi({ id: 'r', fields: { 'Fuente': 'Airbnb', 'UID canal': 'u1@airbnb.com', 'Enlace canal': 'https://www.airbnb.com/hosting/reservations/details/HM1' } });
+    expect(r).toMatchObject({ fuente: 'Airbnb', uidCanal: 'u1@airbnb.com', enlaceCanal: 'https://www.airbnb.com/hosting/reservations/details/HM1' });
+    expect(aReservaApi({ id: 'r', fields: {} })).toMatchObject({ fuente: 'Directo', uidCanal: '', enlaceCanal: '' });
+    expect(aReservaApi({ id: 'r', fields: { 'Fuente': { name: 'Booking.com' } } }).fuente).toBe('Booking.com');
+    expect(FUENTES.directo).toBe('Directo');
+  });
+  it('aCanalApi y estadoCanal', () => {
+    const c = aCanalApi({ id: 'c1', fields: { 'Canal': 'Airbnb', 'Activo': true, 'Enlace ICS': 'https://x/y.ics', 'Última lectura': '2026-10-13T14:00:00.000Z', 'Último resultado': 'ok · 1 activas' } });
+    expect(c).toEqual({ id: 'c1', canal: 'Airbnb', activo: true, enlace: 'https://x/y.ics', ultimaLectura: '2026-10-13T14:00:00.000Z', ultimoResultado: 'ok · 1 activas' });
+    expect(estadoCanal(c)).toEqual({ canal: 'Airbnb', ultimaLectura: '2026-10-13T14:00:00.000Z', ultimoResultado: 'ok · 1 activas' });
+    expect(aCanalApi({ id: 'c2', fields: { 'Canal': 'Booking.com' } })).toEqual({ id: 'c2', canal: 'Booking.com', activo: false, enlace: '', ultimaLectura: null, ultimoResultado: '' });
   });
 });

@@ -40,3 +40,10 @@ describe('una operación = una línea (revisión final)', () => {
     expect(lineaHistorial('editó Notas: a\r\n  b → c', T)).toBe('2026-10-13 14:05 · gerencia · editó Notas: a b → c');
   });
 });
+
+describe('firma', () => {
+  it('por defecto firma gerencia; la sincronización firma con su nombre', () => {
+    expect(lineaHistorial('llegó por Airbnb', T, 'sincronización')).toBe('2026-10-13 14:05 · sincronización · llegó por Airbnb');
+    expect(lineaHistorial('x', T)).toBe('2026-10-13 14:05 · gerencia · x');
+  });
+});

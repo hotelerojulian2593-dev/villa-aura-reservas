@@ -54,9 +54,28 @@ describe('sembrarDemo', () => {
   it('crea tres reservas con sus pagos', async () => {
     const cliente = crearClienteFalso();
     const ids = await sembrarDemo(cliente, '2026-10-12');
-    expect(Object.keys(ids)).toEqual(['a', 'b', 'c']);
+    expect(Object.keys(ids)).toEqual(['a', 'b', 'c', 'canalAirbnb']);
     expect(await cliente.listar('Reservas')).toHaveLength(3);
     expect(await cliente.listar('Pagos')).toHaveLength(3);
     expect((await cliente.obtener('Reservas', ids.c)).fields['Pagos']).toHaveLength(2);
+  });
+});
+
+describe('falso: tabla Canales y fórmula de canal', () => {
+  it('crea y lista Canales; la fórmula de canal filtra por Fuente y salida futura sin excluir canceladas', async () => {
+    const cliente = crearClienteFalso();
+    const c = await cliente.crear('Canales', { 'Canal': 'Airbnb', 'Activo': true, 'Enlace ICS': 'https://x/y.ics' });
+    expect((await cliente.listar('Canales')).map((r) => r.id)).toEqual([c.id]);
+    const viva = await cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': '2026-12-17', 'Fecha salida': '2026-12-19', 'Habitaciones': ['FULL HOUSE'], 'Fuente': 'Airbnb', 'UID canal': 'u1' });
+    const cancelada = await cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': '2026-12-20', 'Fecha salida': '2026-12-22', 'Habitaciones': ['FULL HOUSE'], 'Fuente': 'Airbnb', 'UID canal': 'u2', 'Estado': 'Cancelada' });
+    await cliente.crear('Reservas', { 'Huésped': 'Airbnb', 'Fecha entrada': '2026-09-01', 'Fecha salida': '2026-09-03', 'Habitaciones': ['FULL HOUSE'], 'Fuente': 'Airbnb', 'UID canal': 'u0' });
+    await cliente.crear('Reservas', { 'Huésped': 'Ana', 'Fecha entrada': '2026-12-17', 'Fecha salida': '2026-12-19', 'Habitaciones': ['La Elsa'], 'Fuente': 'Directo' });
+    const regs = await cliente.listar('Reservas', { filterByFormula: "AND({Fuente} = 'Airbnb', IS_AFTER({Fecha salida}, DATETIME_PARSE('2026-10-13', 'YYYY-MM-DD')))" });
+    expect(regs.map((r) => r.id).sort()).toEqual([viva.id, cancelada.id].sort());
+  });
+  it('sembrarDemo deja un canal Airbnb activo', async () => {
+    const cliente = crearClienteFalso();
+    const ids = await sembrarDemo(cliente, '2026-10-13');
+    expect((await cliente.obtener('Canales', ids.canalAirbnb)).fields).toMatchObject({ 'Canal': 'Airbnb', 'Activo': true });
   });
 });
