@@ -1,1 +1,1 @@
-{ "cleanUrls": true, "trailingSlash": false }
+{ "cleanUrls": true, "trailingSlash": false, "crons": [{ "path": "/api/sincronizar", "schedule": "0 10 * * *" }] }
