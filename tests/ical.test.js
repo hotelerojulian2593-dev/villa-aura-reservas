@@ -63,3 +63,32 @@ describe('datosDeDescripcion', () => {
     expect(datosDeDescripcion(undefined)).toEqual({ codigo: '', enlace: '', telefonoFinal: '' });
   });
 });
+
+import { generarIcs, plegar, HOST } from '../lib/ical.js';
+
+describe('generarIcs', () => {
+  const AHORA = new Date('2026-10-13T19:05:00Z');
+  const r = { id: 'recAAAAAAAAAAAAAA', huesped: 'Ana Pérez', entrada: '2026-10-17', salida: '2026-10-19', habitaciones: ['La Rosaura'] };
+  it('un VEVENT por reserva, fechas VALUE=DATE con salida exclusiva, sin nombres, CRLF', () => {
+    const ics = generarIcs([r], AHORA);
+    const lineas = ics.split('\r\n');
+    expect(lineas.slice(0, 5)).toEqual(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Villa Aura//Reservas//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']);
+    expect(lineas).toContain(`UID:recAAAAAAAAAAAAAA@${HOST}`);
+    expect(lineas).toContain('DTSTAMP:20261013T190500Z');
+    expect(lineas).toContain('DTSTART;VALUE=DATE:20261017');
+    expect(lineas).toContain('DTEND;VALUE=DATE:20261019');
+    expect(lineas).toContain('SUMMARY:Villa Aura - ocupado');
+    expect(ics).not.toMatch(/Ana|Rosaura/);
+    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+    expect(ics).not.toMatch(/[^\r]\n/);
+  });
+  it('ida y vuelta con parsearIcs; sin reservas sigue siendo un calendario válido', () => {
+    expect(parsearIcs(generarIcs([r], AHORA))).toEqual([{ uid: `recAAAAAAAAAAAAAA@${HOST}`, inicio: '2026-10-17', fin: '2026-10-19', resumen: 'Villa Aura - ocupado', descripcion: '' }]);
+    expect(parsearIcs(generarIcs([], AHORA))).toEqual([]);
+  });
+  it('plegar corta a 75 octetos y continúa con espacio', () => {
+    expect(plegar('corta')).toBe('corta');
+    expect(plegar('a'.repeat(100))).toBe(`${'a'.repeat(75)}\r\n ${'a'.repeat(25)}`);
+    expect(plegar('a'.repeat(160)).split('\r\n ')).toEqual(['a'.repeat(75), 'a'.repeat(74), 'a'.repeat(11)]);
+  });
+});
