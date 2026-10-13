@@ -1,0 +1,18 @@
+{
+  "name": "villa-aura-reservas",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Villa Aura — formulario de reservas, mini-PMS y API sobre Airtable (Vercel)",
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "node --env-file=.env.local scripts/dev.mjs",
+    "dev:falso": "node scripts/dev.mjs --falso",
+    "migrar": "node --env-file=.env.local scripts/migrar-anticipos.mjs",
+    "migrar:aplicar": "node --env-file=.env.local scripts/migrar-anticipos.mjs --aplicar",
+    "deploy": "vercel deploy --prod"
+  },
+  "devDependencies": { "vitest": "^5.0.4" }
+}
