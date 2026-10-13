@@ -32,6 +32,15 @@ describe('cliente falso', () => {
     await expect(cliente.obtener('Reservas', 'recNoExiste000000')).rejects.toMatchObject({ name: 'AirtableError', status: 404 });
     await expect(cliente.listar('Reservas', { filterByFormula: '{Estado}="x"' })).rejects.toThrow(/no soportada/);
   });
+  it("excluye Estado = 'Cancelada' cuando la fórmula lo pide", async () => {
+    const cliente = crearClienteFalso();
+    const viva = await cliente.crear('Reservas', { 'Huésped': 'V', 'Fecha entrada': '2026-10-17', 'Fecha salida': '2026-10-19', 'Habitaciones': ['La Rosaura'], 'Estado': 'Confirmado' });
+    const cancelada = await cliente.crear('Reservas', { 'Huésped': 'C', 'Fecha entrada': '2026-10-17', 'Fecha salida': '2026-10-19', 'Habitaciones': ['La Elsa'], 'Estado': 'Cancelada' });
+    const sin = await cliente.listar('Reservas', { filterByFormula: `${RANGO('2026-10-01', '2026-11-01').slice(0, -1)}, {Estado} != 'Cancelada')` });
+    expect(sin.map((r) => r.id)).toEqual([viva.id]);
+    const con = await cliente.listar('Reservas', { filterByFormula: RANGO('2026-10-01', '2026-11-01') });
+    expect(con.map((r) => r.id).sort()).toEqual([viva.id, cancelada.id].sort());
+  });
   it('actualizar mezcla campos y respeta maxRecords', async () => {
     const cliente = crearClienteFalso();
     const r = await cliente.crear('Reservas', { 'Huésped': 'Ana', 'Estado': 'Anticipo pendiente', 'Fecha entrada': '2026-10-17', 'Fecha salida': '2026-10-19', 'Habitaciones': [] });
