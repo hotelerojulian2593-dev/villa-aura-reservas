@@ -1,6 +1,7 @@
 import { noches } from './fechas.js';
 import { formatearCOP } from './dinero.js';
-import { expandir, FULL_HOUSE } from './disponibilidad.js';
+import { expandir, FULL_HOUSE, buscarConflicto } from './disponibilidad.js';
+import { esDeCanal } from './canales.js';
 
 // Posición de la barra de una reserva dentro de un mes [desde, hasta).
 export function barraEnMes(reserva, desde, hasta) {
@@ -40,6 +41,7 @@ export function telefonoWa(telefono) {
 }
 
 export function etiquetaPago(reserva) {
+  if (esDeCanal(reserva)) return `Cobro en ${reserva.fuente}`;
   switch (reserva.estadoPago) {
     case 'pagado': return 'Pagado ✓';
     case 'parcial': return `Falta ${formatearCOP(reserva.saldo)}`;
@@ -51,4 +53,15 @@ export function etiquetaPago(reserva) {
 export function porcentajePago(reserva) {
   if (!reserva.valorTotal) return 0;
   return Math.max(0, Math.min(100, Math.round((100 * reserva.pagado) / reserva.valorTotal)));
+}
+
+// Reservas de canal que se solapan con otra reserva activa del rango cargado (y esa otra).
+export function idsConChoque(reservas) {
+  const ids = new Set();
+  for (const r of reservas) {
+    if (!esDeCanal(r)) continue;
+    const otra = buscarConflicto({ id: r.id, entrada: r.entrada, salida: r.salida, habitaciones: r.habitaciones }, reservas);
+    if (otra) { ids.add(r.id); ids.add(otra.id); }
+  }
+  return ids;
 }

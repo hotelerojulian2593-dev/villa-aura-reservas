@@ -46,6 +46,13 @@ describe('kpisMes', () => {
     expect(k.porCobrar).toBe(530000 + 1500000);              // saldos de reservas que llegan en el mes
     expect(k.sinValor).toBe(1);                              // C
   });
+  it('las reservas de canal cuentan en ocupación pero no en cobrado, por cobrar ni sin valor', () => {
+    const airbnb = { id: 'X', entrada: '2026-10-20', salida: '2026-10-22', habitaciones: ['FULL HOUSE'], fuente: 'Airbnb', valorTotal: 900000, pagos: [{ fecha: '2026-10-05', monto: 100 }] };
+    const sin = kpisMes([A, B, C, D], MES.desde, MES.hasta);
+    const con = kpisMes([A, B, C, D, airbnb], MES.desde, MES.hasta);
+    expect(con.nochesOcupadas).toBe(sin.nochesOcupadas + 10);
+    expect(con).toMatchObject({ cobrado: sin.cobrado, porCobrar: sin.porCobrar, sinValor: sin.sinValor });
+  });
   it('mes vacío', () => {
     expect(kpisMes([], MES.desde, MES.hasta)).toEqual({ ocupacion: 0, nochesOcupadas: 0, cobrado: 0, porCobrar: 0, sinValor: 0 });
   });

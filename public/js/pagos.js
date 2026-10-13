@@ -1,5 +1,6 @@
 import { noches } from './fechas.js';
 import { HABITACIONES, expandir } from './disponibilidad.js';
+import { esDeCanal } from './canales.js';
 
 // Resumen de pagos de una reserva. valorTotal null = reserva vieja sin valor definido.
 export function resumenPagos(valorTotal, pagos) {
@@ -25,6 +26,7 @@ export function kpisMes(reservas, desde, hasta) {
   let sinValor = 0;
   for (const r of reservas) {
     nochesOcupadas += nochesEnRango(r, desde, hasta) * expandir(r.habitaciones).length;
+    if (esDeCanal(r)) continue; // su dinero lo cobra la plataforma
     for (const p of r.pagos ?? []) {
       if (p.fecha >= desde && p.fecha < hasta) cobrado += Number(p.monto) || 0;
     }

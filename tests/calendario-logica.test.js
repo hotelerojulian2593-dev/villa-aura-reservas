@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago,
+  barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago, idsConChoque,
 } from '../public/js/calendario-logica.js';
 
 const MES = { desde: '2026-10-01', hasta: '2026-11-01' };
@@ -66,5 +66,19 @@ describe('etiqueta y porcentaje de pago', () => {
     expect(porcentajePago(A)).toBe(50);
     expect(porcentajePago({ ...A, pagado: 2000000 })).toBe(100);
     expect(porcentajePago({ ...A, valorTotal: null })).toBe(0);
+  });
+});
+
+describe('reservas de canal', () => {
+  const AIRBNB = { ...base, id: 'X', entrada: '2026-10-18', salida: '2026-10-20', habitaciones: ['FULL HOUSE'], fuente: 'Airbnb', valorTotal: null, pagado: 0, saldo: null, estadoPago: 'sin_valor' };
+  it('idsConChoque marca la reserva de canal y la directa con la que choca', () => {
+    expect([...idsConChoque([A, AIRBNB, B])].sort()).toEqual(['A', 'X']);
+    expect(idsConChoque([A, { ...AIRBNB, entrada: '2026-10-20', salida: '2026-10-22' }]).size).toBe(0);
+    expect(idsConChoque([A, B]).size).toBe(0);
+    expect(idsConChoque([]).size).toBe(0);
+  });
+  it('etiquetaPago para canal', () => {
+    expect(etiquetaPago(AIRBNB)).toBe('Cobro en Airbnb');
+    expect(etiquetaPago({ ...AIRBNB, fuente: 'Directo' })).toBe('Valor total sin definir');
   });
 });
