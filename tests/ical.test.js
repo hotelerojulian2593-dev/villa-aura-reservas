@@ -92,3 +92,14 @@ describe('generarIcs', () => {
     expect(plegar('a'.repeat(160)).split('\r\n ')).toEqual(['a'.repeat(75), 'a'.repeat(74), 'a'.repeat(11)]);
   });
 });
+
+describe('revisión final — calendarios menos prolijos', () => {
+  it('acepta BOM, nombres en minúscula y espacios al final de línea', () => {
+    const ics = '\uFEFFbegin:vcalendar \r\nversion:2.0\r\nbegin:vevent\r\nuid:a@x\r\ndtstart;value=date:20261101\r\ndtend;value=date:20261103 \r\nsummary:Reserved\r\nend:vevent\r\nend:vcalendar\r\n';
+    expect(parsearIcs(ics)).toEqual([{ uid: 'a@x', inicio: '2026-11-01', fin: '2026-11-03', resumen: 'Reserved', descripcion: '' }]);
+  });
+  it('desescapa \; y no confunde una barra escapada seguida de n con un salto de línea', () => {
+    const ics = 'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nDTSTART;VALUE=DATE:20261101\nDESCRIPTION:x\;y\\\\z\\\\nw\\,v\nEND:VEVENT\nEND:VCALENDAR';
+    expect(parsearIcs(ics)[0].descripcion).toBe('x;y\\z\\nw,v');
+  });
+});

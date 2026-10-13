@@ -165,3 +165,23 @@ describe('sincronizarTodo', () => {
     expect(await sincronizarTodo({ cliente, tablas, fetchImpl: falla, ahora: AHORA })).toEqual({ ok: true, canales: [] });
   });
 });
+
+describe('revisión final — ediciones a mano en Airtable', () => {
+  it('una reserva marcada Airbnb a mano (sin UID canal) no se toca', async () => {
+    const vieja = await cliente.crear('Reservas', { 'Huésped': 'Pedro (Airbnb viejo)', 'Fecha entrada': d(40), 'Fecha salida': d(42), 'Habitaciones': ['FULL HOUSE'], 'Estado': 'Confirmado', 'Fuente': 'Airbnb' });
+    const r = await correr(responde(icsDe([EVENTO])));
+    expect(r).toMatchObject({ ok: true, nuevas: 1, canceladas: 0 });
+    expect((await cliente.obtener('Reservas', vieja.id)).fields['Estado']).toBe('Confirmado');
+  });
+  it('un nombre de canal desconocido da un error claro, no toca nada y no frena a los demás canales', async () => {
+    const raro = aCanalApi(await cliente.crear('Canales', { 'Canal': 'Booking', 'Activo': true, 'Enlace ICS': 'https://admin.booking.com/x.ics' }));
+    const r = await sincronizarCanal({ cliente, tablas, canal: raro, fetchImpl: responde(icsDe([{ uid: 'b1', inicio: d(30), fin: d(32) }])), ahora: AHORA });
+    expect(r).toEqual({ ok: false, canal: 'Booking', error: 'canal desconocido "Booking": usa Airbnb o Booking.com' });
+    expect((await cliente.obtener('Canales', raro.id)).fields['Último resultado']).toBe('error: canal desconocido "Booking": usa Airbnb o Booking.com');
+    expect(await cliente.listar('Reservas')).toHaveLength(3);
+    const todo = await sincronizarTodo({ cliente, tablas, fetchImpl: responde(icsDe([EVENTO])), ahora: AHORA });
+    expect(todo.ok).toBe(false);
+    expect(todo.canales.find((c) => c.canal === 'Airbnb')).toMatchObject({ ok: true, nuevas: 1 });
+    expect(todo.canales.find((c) => c.canal === 'Booking')).toMatchObject({ ok: false });
+  });
+});
