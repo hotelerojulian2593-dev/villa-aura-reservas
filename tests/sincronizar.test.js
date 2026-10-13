@@ -134,3 +134,34 @@ describe('camposReservaCanal', () => {
     });
   });
 });
+
+import { sincronizarTodo } from '../lib/sincronizar.js';
+
+describe('sincronizarTodo', () => {
+  it('solo canales activos, en orden; ok false si alguno falla', async () => {
+    await cliente.crear('Canales', { 'Canal': 'Booking.com', 'Activo': false, 'Enlace ICS': 'https://b/x.ics' });
+    const r = await sincronizarTodo({ cliente, tablas, fetchImpl: responde(icsDe([EVENTO])), ahora: AHORA });
+    expect(r.ok).toBe(true);
+    expect(r.canales.map((c) => c.canal)).toEqual(['Airbnb']);
+    expect(r.canales[0]).toMatchObject({ nuevas: 1 });
+    const malo = await sincronizarTodo({ cliente, tablas, fetchImpl: falla, ahora: AHORA });
+    expect(malo).toMatchObject({ ok: false, canales: [{ ok: false, canal: 'Airbnb', error: 'fetch failed' }] });
+  });
+  it('siViejoMin: omite si todos leyeron hace poco; lee si alguno está viejo o nunca leyó', async () => {
+    const llamadas = [];
+    const contar = async (...args) => { llamadas.push(args[0]); return responde(icsDe([]))(); };
+    const primero = await sincronizarTodo({ cliente, tablas, fetchImpl: contar, ahora: AHORA, siViejoMin: 10 });
+    expect(primero).toMatchObject({ ok: true, canales: [{ canal: 'Airbnb', ok: true }] });
+    expect(llamadas).toHaveLength(1);
+    const segundo = await sincronizarTodo({ cliente, tablas, fetchImpl: contar, ahora: new Date(AHORA.getTime() + 3 * 60000), siViejoMin: 10 });
+    expect(segundo).toEqual({ ok: true, omitido: true, canales: [{ canal: 'Airbnb', ultimaLectura: '2026-10-13T19:05:00.000Z', ultimoResultado: 'ok · 0 activas · 0 nuevas · 0 cambiadas · 0 canceladas' }] });
+    expect(llamadas).toHaveLength(1);
+    const tercero = await sincronizarTodo({ cliente, tablas, fetchImpl: contar, ahora: new Date(AHORA.getTime() + 11 * 60000), siViejoMin: 10 });
+    expect(tercero.omitido).toBeUndefined();
+    expect(llamadas).toHaveLength(2);
+  });
+  it('sin canales activos → ok con lista vacía', async () => {
+    await cliente.actualizar('Canales', ids.canalAirbnb, { 'Activo': false });
+    expect(await sincronizarTodo({ cliente, tablas, fetchImpl: falla, ahora: AHORA })).toEqual({ ok: true, canales: [] });
+  });
+});
