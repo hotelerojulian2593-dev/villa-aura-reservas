@@ -93,3 +93,11 @@ describe('POST /api/pagos en reserva cancelada', () => {
     expect((await cliente.obtener('Reservas', ids.b)).fields['Pagos'] ?? []).toHaveLength(0);
   });
 });
+
+describe('revisión final — historial de una línea', () => {
+  it('motivo de anulación con salto de línea → una sola línea en el historial de la reserva', async () => {
+    const res = await patch({ id: pagoA, anular: { motivo: 'se registró\ndos veces' } });
+    expect(res.statusCode).toBe(200);
+    expect((await historialDe(ids.a)).split('\n')).toHaveLength(1);
+  });
+});

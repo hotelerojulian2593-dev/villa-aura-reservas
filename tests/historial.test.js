@@ -33,3 +33,10 @@ describe('cambiosReales y describirCambios', () => {
     expect(describirCambios(antes, { personas: 4 })).toBe('');
   });
 });
+
+describe('una operación = una línea (revisión final)', () => {
+  it('los saltos de línea del texto del usuario se aplanan a un espacio', () => {
+    expect(lineaHistorial('canceló · motivo: no viajó\npor lluvia', T)).toBe('2026-10-13 14:05 · gerencia · canceló · motivo: no viajó por lluvia');
+    expect(lineaHistorial('editó Notas: a\r\n  b → c', T)).toBe('2026-10-13 14:05 · gerencia · editó Notas: a b → c');
+  });
+});

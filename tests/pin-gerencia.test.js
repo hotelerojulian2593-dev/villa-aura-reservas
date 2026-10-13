@@ -41,3 +41,24 @@ describe('exigirPinGerencia', () => {
     expect(res.body).toEqual({ ok: false, error: 'PIN de gerencia incorrecto.' });
   });
 });
+
+describe('freno compartido cuando el PIN de las señoras acierta en cada petición (revisión final)', () => {
+  // Toda operación de gerencia valida primero X-Pin (acierta) y luego X-Pin-Gerencia.
+  // El acierto del primero no debe borrar los fallos del segundo en la misma IP.
+  it('tres fallos de gerencia intercalados con aciertos de señoras → el tercero espera 1 s', () => {
+    const t = Date.now();
+    for (let i = 0; i < 2; i++) {
+      expect(verificarPin('123456', '5.5.5.5', ENV, t).ok).toBe(true);
+      expect(verificarPin('000000', '5.5.5.5', ENV, t, 'PIN_GERENCIA').esperaMs).toBe(0);
+    }
+    expect(verificarPin('123456', '5.5.5.5', ENV, t).ok).toBe(true);
+    expect(verificarPin('000000', '5.5.5.5', ENV, t, 'PIN_GERENCIA').esperaMs).toBe(1000);
+  });
+  it('un acierto del PIN de gerencia sí reinicia su contador', () => {
+    const t = Date.now();
+    verificarPin('000000', '6.6.6.6', ENV, t, 'PIN_GERENCIA');
+    verificarPin('000000', '6.6.6.6', ENV, t, 'PIN_GERENCIA');
+    expect(verificarPin('654321', '6.6.6.6', ENV, t, 'PIN_GERENCIA').ok).toBe(true);
+    expect(verificarPin('000000', '6.6.6.6', ENV, t, 'PIN_GERENCIA').esperaMs).toBe(0);
+  });
+});

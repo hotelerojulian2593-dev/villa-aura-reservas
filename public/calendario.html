@@ -128,7 +128,7 @@
 <footer class="pie">Villa Aura · Sistema de reservas · Marketing Hotelero</footer>
 
 <script type="module">
-  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo, obtenerPinGerencia, guardarPinGerencia, pinValido, esErrorDeGerencia } from '/js/app.js';
+  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo, obtenerPinGerencia, guardarPinGerencia, borrarPinGerencia, pinValido, esErrorDeGerencia } from '/js/app.js';
   import { hoyBogota, rangoMes, mesDeISO, nombreMes, esFinDeSemana, diaSemana, fechaCorta, DIAS_CORTOS, sumarDias } from '/js/fechas.js';
   import { formatearCOP, parsearCOP } from '/js/dinero.js';
   import { HABITACIONES, FULL_HOUSE, OPCIONES_HABITACION } from '/js/disponibilidad.js';
@@ -352,6 +352,7 @@
         <button type="submit" class="boton boton--rojo" id="g-confirmar-cancelar">Confirmar cancelación</button>
       </form>
       <details class="historial"><summary>Historial</summary><pre>${escapar(r.historial || 'Sin cambios registrados.')}</pre></details>
+      <button type="button" class="boton boton--secundario" id="g-salir">Salir de gerencia</button>
     </div>`;
   }
 
@@ -452,6 +453,14 @@
   function conectarGerencia(r) {
     $('g-editar').addEventListener('click', () => $('g-form-editar').classList.toggle('oculto'));
     $('g-cancelar').addEventListener('click', () => $('g-form-cancelar').classList.toggle('oculto'));
+    // Olvida el PIN de gerencia en este dispositivo (p. ej. si se usó el celular de las señoras).
+    $('g-salir').addEventListener('click', () => {
+      borrarPinGerencia();
+      gerenciaActiva = false;
+      actualizarBloqueCanceladas();
+      abrirDetalle(r.id);
+      mostrarAviso('Saliste de gerencia en este dispositivo.');
+    });
     formatoCOPEnVivo($('g-valor'));
     document.querySelectorAll('[data-g-hab]').forEach((b) => b.addEventListener('click', () => alternarChipHabitacion(b)));
     $('g-form-editar').addEventListener('submit', (ev) => { ev.preventDefault(); guardarEdicion(r); });

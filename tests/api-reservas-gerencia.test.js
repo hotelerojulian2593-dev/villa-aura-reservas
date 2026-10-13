@@ -123,3 +123,34 @@ describe('GET /api/reservas y canceladas', () => {
     expect(res.body).toEqual({ ok: false, error: 'PIN de gerencia incorrecto.' });
   });
 });
+
+describe('revisión final — freno, historial y habitaciones', () => {
+  it('tres PATCH con PIN de gerencia malo desde la misma IP → el tercero espera 1 s', async () => {
+    const dormir = vi.fn(async () => {});
+    const h = crearHandler({ cliente, env: ENV, dormir, ahora: () => AHORA });
+    for (const pin of ['000001', '000002', '000003']) {
+      const res = crearRes();
+      await h(req({ method: 'PATCH', body: { id: ids.a, cambios: { personas: 5 } } }, pin), res);
+      expect(res.statusCode).toBe(401);
+    }
+    expect(dormir).toHaveBeenCalledWith(1000);
+  });
+  it('notas con saltos de línea → el historial sigue siendo una línea por operación', async () => {
+    const res = await patch({ id: ids.a, cambios: { notas: 'línea uno\n2026-01-01 00:00 · gerencia · canceló · motivo: FORJADO' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reserva.historial.split('\n')).toHaveLength(1);
+    expect(res.body.reserva.notas).toBe('línea uno\n2026-01-01 00:00 · gerencia · canceló · motivo: FORJADO');
+  });
+  it('motivo de cancelación con salto de línea → una sola línea de historial', async () => {
+    const res = await patch({ id: ids.b, cancelar: { motivo: 'no viajó\npor lluvia' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reserva.historial).toBe('2026-10-13 14:05 · gerencia · canceló · motivo: no viajó por lluvia');
+  });
+  it('cambiar solo las habitaciones a una ocupada (FULL HOUSE sobre otra reserva) → 409 y nada cambia', async () => {
+    await cliente.crear('Reservas', { 'Huésped': 'Otro', 'Teléfono': '300', 'Fecha entrada': d(5), 'Fecha salida': d(7), 'Habitaciones': ['La Luis'], 'Personas': 2, 'Estado': 'Confirmado' });
+    const res = await patch({ id: ids.a, cambios: { habitaciones: ['FULL HOUSE'] } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body.conflicto).toBeTruthy();
+    expect((await cliente.obtener('Reservas', ids.a)).fields['Habitaciones']).toEqual(['La Rosaura', 'La Clara']);
+  });
+});
