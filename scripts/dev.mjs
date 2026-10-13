@@ -17,6 +17,7 @@ const deps = {};
 
 if (usarFalso) {
   process.env.PIN_SENORAS ||= '123456';
+  process.env.PIN_GERENCIA ||= '654321';
   deps.env = process.env;
   deps.cliente = crearClienteFalso();
   await sembrarDemo(deps.cliente, hoyBogota());
@@ -86,5 +87,5 @@ http.createServer(async (req, res) => {
     if (!res.headersSent) res.status(500).json({ ok: false, error: 'Error del servidor de desarrollo.' });
   }
 }).listen(puerto, () => {
-  console.log(`Villa Aura en http://localhost:${puerto} ${usarFalso ? '· Airtable FALSO (PIN 123456)' : '· Airtable real (.env.local)'}`);
+  console.log(`Villa Aura en http://localhost:${puerto} ${usarFalso ? '· Airtable FALSO (PIN 123456 · gerencia 654321)' : '· Airtable real (.env.local)'}`);
 });

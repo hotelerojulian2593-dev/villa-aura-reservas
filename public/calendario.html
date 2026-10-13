@@ -55,6 +55,19 @@
     .pagos li em { grid-column: 1 / -1; font-size: 11px; color: var(--gris); font-style: normal; }
     .form-abono { background: var(--fondo); border-radius: var(--radio); padding: 14px; margin: 12px 0; }
     .form-abono .boton { margin-top: 4px; }
+    .gerencia { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--borde); }
+    .gerencia .boton + .boton, .gerencia form + .boton { margin-top: 10px; }
+    .boton--rojo { background: var(--rojo); }
+    .pagos li.anulado > span, .pagos li.anulado > strong { text-decoration: line-through; color: var(--gris-claro); }
+    .pago-acciones { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 4px; }
+    .pago-acciones .boton--chico { padding: 6px 10px; min-height: 34px; font-size: 11px; }
+    .pago-form { grid-column: 1 / -1; }
+    .historial { margin: 12px 0; font-size: 12px; }
+    .historial summary { cursor: pointer; color: var(--gris); }
+    .historial pre { white-space: pre-wrap; font-family: inherit; font-size: 11px; color: var(--gris); background: var(--fondo); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+    #canceladas { margin-top: 18px; }
+    #canceladas summary { cursor: pointer; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gris); margin-bottom: 10px; }
+    .cancelada { opacity: .85; }
     /* El calendario aprovecha el ancho en pantallas grandes (el formulario conserva 560 px) */
     .contenedor { max-width: 1200px; }
     @media (min-width: 900px) {
@@ -96,6 +109,7 @@
     <h2 id="titulo-mes"></h2>
     <button type="button" id="mes-sig" aria-label="Mes siguiente">›</button>
   </div>
+  <div class="aviso oculto" id="aviso" role="status"></div>
   <div class="kpis" id="kpis"></div>
   <div class="grilla-wrap" id="grilla"></div>
   <div class="leyenda">
@@ -107,16 +121,17 @@
   <div class="error" id="falla" role="alert"><span id="falla-texto"></span><br><button type="button" class="boton boton--chico" id="reintentar" style="margin-top:8px">Reintentar</button></div>
   <h3 class="seccion">Próximas llegadas</h3>
   <div class="lista" id="lista"></div>
+  <details id="canceladas" class="oculto"><summary>Canceladas del mes</summary><div class="lista" id="lista-canceladas"></div></details>
 </main>
 
 <div id="hoja"></div>
 <footer class="pie">Villa Aura · Sistema de reservas · Marketing Hotelero</footer>
 
 <script type="module">
-  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo } from '/js/app.js';
-  import { hoyBogota, rangoMes, mesDeISO, nombreMes, esFinDeSemana, diaSemana, fechaCorta, DIAS_CORTOS } from '/js/fechas.js';
+  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo, obtenerPinGerencia, guardarPinGerencia, pinValido, esErrorDeGerencia } from '/js/app.js';
+  import { hoyBogota, rangoMes, mesDeISO, nombreMes, esFinDeSemana, diaSemana, fechaCorta, DIAS_CORTOS, sumarDias } from '/js/fechas.js';
   import { formatearCOP, parsearCOP } from '/js/dinero.js';
-  import { HABITACIONES } from '/js/disponibilidad.js';
+  import { HABITACIONES, FULL_HOUSE, OPCIONES_HABITACION } from '/js/disponibilidad.js';
   import { kpisMes } from '/js/pagos.js';
   import { barraEnMes, filasDe, colorEstado, ordenarProximas, telefonoWa, etiquetaPago, porcentajePago } from '/js/calendario-logica.js';
 
@@ -126,6 +141,8 @@
   let { anio, mes } = mesDeISO(hoy);
   let reservas = [];
   let cargando = false;
+  let gerenciaActiva = Boolean(obtenerPinGerencia());
+  let hojaAbierta = null;
 
   function iniciar() {
     $('app').classList.remove('oculto');
@@ -133,7 +150,9 @@
     $('mes-sig').addEventListener('click', () => cambiarMes(1));
     $('actualizar').addEventListener('click', cargar);
     $('reintentar').addEventListener('click', cargar);
+    $('canceladas').addEventListener('toggle', () => { if ($('canceladas').open) cargarCanceladas(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cargar(); });
+    actualizarBloqueCanceladas();
     cargar();
   }
 
@@ -150,12 +169,38 @@
     asegurarPin({ raiz: $('pin'), alListo: () => { $('app').classList.remove('oculto'); cargar(); } });
   }
 
+  function mostrarAviso(texto) {
+    const el = $('aviso');
+    el.textContent = texto;
+    el.classList.remove('oculto');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function actualizarBloqueCanceladas() {
+    $('canceladas').classList.toggle('oculto', !gerenciaActiva);
+    if (!gerenciaActiva) $('canceladas').open = false;
+  }
+
+  // Si la API rechaza el PIN de gerencia, app.js ya lo borró: volvemos al modo normal.
+  function manejarErrorGerencia(e, r) {
+    if (e.status === 401 && esErrorDeGerencia(e.message)) {
+      gerenciaActiva = false;
+      actualizarBloqueCanceladas();
+      if (r) abrirDetalle(r.id);
+      mostrarAviso('El PIN de gerencia no fue aceptado. Vuelve a ingresarlo.');
+      return true;
+    }
+    if (e.status === 401) { pedirPin(); return true; }
+    return false;
+  }
+
   async function cargar() {
     if (cargando) return;
     cargando = true;
     hoy = hoyBogota();
     const { desde, hasta } = rangoMes(anio, mes);
     $('titulo-mes').textContent = `${nombreMes(mes)} ${anio}`;
+    $('aviso').classList.add('oculto');
     $('kpis').innerHTML = '<div class="tarjeta esqueleto"></div>'.repeat(3);
     $('grilla').innerHTML = '<div class="esqueleto" style="height:200px"></div>';
     $('lista').innerHTML = '';
@@ -163,11 +208,29 @@
     try {
       ({ reservas } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}`));
       dibujar();
+      if ($('canceladas').open) cargarCanceladas();
     } catch (e) {
       if (e.status === 401) pedirPin();
       else { $('falla-texto').textContent = e.message; $('falla').classList.add('visible'); $('grilla').innerHTML = ''; $('kpis').innerHTML = ''; }
     } finally {
       cargando = false;
+    }
+  }
+
+  async function cargarCanceladas() {
+    const { desde, hasta } = rangoMes(anio, mes);
+    const cont = $('lista-canceladas');
+    cont.innerHTML = '<div class="tarjeta esqueleto"></div>';
+    try {
+      const { reservas: todas } = await api(`/api/reservas?desde=${desde}&hasta=${hasta}&incluirCanceladas=1`, { gerencia: true });
+      const canceladas = todas.filter((r) => r.estado === 'Cancelada');
+      cont.innerHTML = canceladas.length
+        ? canceladas.map((r) => `<div class="tarjeta cancelada"><strong>${escapar(r.huesped)}</strong>
+            <div class="reserva__sub">${fechaCorta(r.entrada)} → ${fechaCorta(r.salida)} · ${escapar(r.habitaciones.join(' · '))}</div>
+            <div class="reserva__sub">${escapar((r.historial || '').split('\n')[0])}</div></div>`).join('')
+        : '<div class="tarjeta vacio">Sin canceladas este mes.</div>';
+    } catch (e) {
+      if (!manejarErrorGerencia(e, null)) cont.innerHTML = `<div class="error visible">${escapar(e.message)}</div>`;
     }
   }
 
@@ -237,15 +300,75 @@
     $('lista').querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => abrirDetalle(b.dataset.id)));
   }
 
-  function cerrarHoja() { $('hoja').innerHTML = ''; }
+  function cerrarHoja() { $('hoja').innerHTML = ''; hojaAbierta = null; }
+
+  // ── parte 2 del mismo script ──
+
+  function listaPagos(r) {
+    if (!r.pagos.length) return '<li class="vacio">Sin abonos registrados.</li>';
+    return r.pagos.map((p) => `
+      <li class="${p.anulado ? 'anulado' : ''}">
+        <span>${fechaCorta(p.fecha)} · ${escapar(p.medio ?? '—')}</span><strong>${formatearCOP(p.monto)}</strong>
+        ${p.nota ? `<em>${escapar(p.nota)}</em>` : ''}
+        ${gerenciaActiva && !p.anulado ? `<div class="pago-acciones">
+          <button type="button" class="boton boton--secundario boton--chico" data-corregir="${p.id}">Corregir</button>
+          <button type="button" class="boton boton--rojo boton--chico" data-anular="${p.id}">Anular</button>
+        </div><div class="pago-form" id="pago-form-${p.id}"></div>` : ''}
+      </li>`).join('');
+  }
+
+  function chipsHabitaciones(seleccion) {
+    return OPCIONES_HABITACION.map((h) => `<button type="button" class="chip${h === FULL_HOUSE ? ' chip--ancho' : ''}${seleccion.includes(h) ? ' activo' : ''}" data-g-hab="${h}">${h === FULL_HOUSE ? '🏠 Full House' : h}</button>`).join('');
+  }
+
+  function chipsMedios(dueno, actual) {
+    return MEDIOS.map((m) => `<button type="button" class="chip chip--medio${m === actual ? ' activo' : ''}" data-medio-de="${dueno}" data-medio="${m}">${m}</button>`).join('');
+  }
+
+  function bloqueGerencia(r) {
+    return `<div class="gerencia">
+      <h3 class="seccion">Gerencia</h3>
+      <button type="button" class="boton boton--secundario" id="g-editar">Editar reserva</button>
+      <form id="g-form-editar" class="form-abono oculto">
+        <div class="campo"><label for="g-huesped">Nombre del huésped</label><input class="entrada" id="g-huesped" value="${escapar(r.huesped)}"></div>
+        <div class="campo"><label for="g-telefono">WhatsApp / Teléfono</label><input class="entrada" id="g-telefono" value="${escapar(r.telefono)}"></div>
+        <div class="fila-2">
+          <div class="campo"><label for="g-entrada">Llegada</label><input class="entrada" type="date" id="g-entrada" value="${r.entrada ?? ''}"></div>
+          <div class="campo"><label for="g-salida">Salida</label><input class="entrada" type="date" id="g-salida" value="${r.salida ?? ''}"></div>
+        </div>
+        <div class="campo"><span class="etiqueta">Habitación(es)</span><div class="chips">${chipsHabitaciones(r.habitaciones)}</div></div>
+        <div class="fila-2">
+          <div class="campo"><label for="g-personas">Personas</label><input class="entrada" type="number" id="g-personas" min="1" max="60" inputmode="numeric" value="${r.personas || ''}"></div>
+          <div class="campo"><label for="g-valor">Valor total</label><input class="entrada" id="g-valor" inputmode="numeric" placeholder="$ 0" value="${r.valorTotal == null ? '' : formatearCOP(r.valorTotal)}"></div>
+        </div>
+        <div class="campo"><label for="g-notas">Notas</label><textarea class="entrada" id="g-notas" rows="2">${escapar(r.notas)}</textarea></div>
+        <div class="error" id="g-error" role="alert"></div>
+        <button type="submit" class="boton" id="g-guardar">Guardar cambios</button>
+      </form>
+      <button type="button" class="boton boton--secundario" id="g-cancelar">Cancelar reserva</button>
+      <form id="g-form-cancelar" class="form-abono oculto">
+        <div class="campo"><label for="g-motivo">Motivo</label><input class="entrada" id="g-motivo" placeholder="Ej.: el cliente no viajó"></div>
+        <div class="error" id="g-cancel-error" role="alert"></div>
+        <button type="submit" class="boton boton--rojo" id="g-confirmar-cancelar">Confirmar cancelación</button>
+      </form>
+      <details class="historial"><summary>Historial</summary><pre>${escapar(r.historial || 'Sin cambios registrados.')}</pre></details>
+    </div>`;
+  }
+
+  function formularioPinGerencia() {
+    return `<div class="gerencia">
+      <p class="reserva__sub">Esta sección es solo para gerencia.</p>
+      <div class="campo"><label for="pin-g-entrada">PIN de gerencia</label><input class="entrada" id="pin-g-entrada" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code"></div>
+      <div class="error" id="pin-g-error" role="alert"></div>
+      <button type="button" class="boton" id="pin-g-boton">Entrar</button>
+    </div>`;
+  }
 
   function abrirDetalle(id) {
     const r = reservas.find((x) => x.id === id);
     if (!r) return;
+    hojaAbierta = id;
     const wa = telefonoWa(r.telefono);
-    const pagos = r.pagos.length
-      ? r.pagos.map((p) => `<li><span>${fechaCorta(p.fecha)} · ${escapar(p.medio ?? '—')}</span><strong>${formatearCOP(p.monto)}</strong>${p.nota ? `<em>${escapar(p.nota)}</em>` : ''}</li>`).join('')
-      : '<li class="vacio">Sin abonos registrados.</li>';
     const saldoSugerido = r.saldo > 0 ? formatearCOP(r.saldo) : '';
     $('hoja').innerHTML = `
       <div class="hoja-fondo" id="hoja-fondo">
@@ -266,12 +389,12 @@
             <div><span>Pagado</span><strong>${formatearCOP(r.pagado)}</strong></div>
             <div><span>Saldo</span><strong class="pago--${r.estadoPago}">${r.saldo == null ? '—' : formatearCOP(r.saldo)}</strong></div>
           </div>
-          ${r.valorTotal == null ? '<div class="aviso">Valor total sin definir — pídele a gerencia completarlo en Airtable.</div>' : ''}
-          <ul class="pagos">${pagos}</ul>
+          ${r.valorTotal == null ? '<div class="aviso">Valor total sin definir — gerencia puede completarlo con "Editar reserva".</div>' : ''}
+          <ul class="pagos">${listaPagos(r)}</ul>
           <button type="button" class="boton boton--dorado" id="abrir-abono">Registrar abono</button>
           <form id="form-abono" class="form-abono oculto">
             <div class="campo"><label for="abono-monto">Monto <span class="req">*</span></label><input class="entrada" id="abono-monto" inputmode="numeric" autocomplete="off" placeholder="$ 0" value="${saldoSugerido}"></div>
-            <div class="campo"><span class="etiqueta">Medio <span class="req">*</span></span><div class="chips chips--medios">${MEDIOS.map((m) => `<button type="button" class="chip chip--medio" data-medio="${m}">${m}</button>`).join('')}</div></div>
+            <div class="campo"><span class="etiqueta">Medio <span class="req">*</span></span><div class="chips chips--medios">${chipsMedios('nuevo', null)}</div></div>
             <div class="fila-2">
               <div class="campo"><label for="abono-fecha">Fecha</label><input class="entrada" type="date" id="abono-fecha" value="${hoy}"></div>
               <div class="campo"><label for="abono-nota">Nota</label><input class="entrada" id="abono-nota" placeholder="Opcional"></div>
@@ -279,6 +402,8 @@
             <div class="error" id="abono-error" role="alert"></div>
             <button type="submit" class="boton boton--dorado" id="guardar-abono">Guardar abono</button>
           </form>
+          <button type="button" class="boton boton--secundario" id="btn-gerencia">${gerenciaActiva ? 'Gerencia ▾' : 'Gerencia'}</button>
+          <div id="gerencia" class="${gerenciaActiva ? '' : 'oculto'}">${gerenciaActiva ? bloqueGerencia(r) : ''}</div>
           <button type="button" class="boton boton--secundario" id="cerrar">Cerrar</button>
         </div>
       </div>`;
@@ -286,17 +411,181 @@
     $('cerrar').addEventListener('click', cerrarHoja);
     $('abrir-abono').addEventListener('click', () => { $('form-abono').classList.remove('oculto'); $('abrir-abono').classList.add('oculto'); $('abono-monto').focus(); });
     formatoCOPEnVivo($('abono-monto'));
-    $('form-abono').querySelectorAll('[data-medio]').forEach((b) => b.addEventListener('click', () => {
-      $('form-abono').querySelectorAll('[data-medio]').forEach((x) => x.classList.toggle('activo', x === b));
-    }));
+    conectarChipsMedio('nuevo');
     $('form-abono').addEventListener('submit', (ev) => { ev.preventDefault(); registrarAbono(r); });
+    $('btn-gerencia').addEventListener('click', () => alternarGerencia(r));
+    if (gerenciaActiva) conectarGerencia(r);
+  }
+
+  function conectarChipsMedio(dueno) {
+    const chips = document.querySelectorAll(`[data-medio-de="${dueno}"]`);
+    chips.forEach((b) => b.addEventListener('click', () => chips.forEach((x) => x.classList.toggle('activo', x === b))));
+  }
+  const medioElegido = (dueno) => document.querySelector(`[data-medio-de="${dueno}"].activo`)?.dataset.medio;
+
+  function alternarGerencia(r) {
+    const cont = $('gerencia');
+    if (gerenciaActiva) { cont.classList.toggle('oculto'); return; }
+    cont.innerHTML = formularioPinGerencia();
+    cont.classList.remove('oculto');
+    const entrada = $('pin-g-entrada');
+    async function intentar() {
+      const pin = entrada.value.trim();
+      if (!pinValido(pin)) { mostrarError($('pin-g-error'), 'El PIN tiene entre 4 y 6 dígitos.'); return; }
+      $('pin-g-boton').disabled = true;
+      guardarPinGerencia(pin);
+      try {
+        await api(`/api/reservas?desde=${hoy}&hasta=${sumarDias(hoy, 1)}&incluirCanceladas=1`, { gerencia: true });
+        gerenciaActiva = true;
+        actualizarBloqueCanceladas();
+        abrirDetalle(r.id);
+      } catch (e) {
+        $('pin-g-boton').disabled = false;
+        mostrarError($('pin-g-error'), e.status === 401 ? 'PIN de gerencia incorrecto.' : e.message);
+      }
+    }
+    $('pin-g-boton').addEventListener('click', intentar);
+    entrada.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') intentar(); });
+    entrada.focus();
+  }
+
+  function conectarGerencia(r) {
+    $('g-editar').addEventListener('click', () => $('g-form-editar').classList.toggle('oculto'));
+    $('g-cancelar').addEventListener('click', () => $('g-form-cancelar').classList.toggle('oculto'));
+    formatoCOPEnVivo($('g-valor'));
+    document.querySelectorAll('[data-g-hab]').forEach((b) => b.addEventListener('click', () => alternarChipHabitacion(b)));
+    $('g-form-editar').addEventListener('submit', (ev) => { ev.preventDefault(); guardarEdicion(r); });
+    $('g-form-cancelar').addEventListener('submit', (ev) => { ev.preventDefault(); cancelarReserva(r); });
+    document.querySelectorAll('[data-corregir]').forEach((b) => b.addEventListener('click', () => mostrarFormCorregir(r, b.dataset.corregir)));
+    document.querySelectorAll('[data-anular]').forEach((b) => b.addEventListener('click', () => mostrarFormAnular(r, b.dataset.anular)));
+  }
+
+  function alternarChipHabitacion(boton) {
+    const todos = [...document.querySelectorAll('[data-g-hab]')];
+    if (boton.dataset.gHab === FULL_HOUSE) {
+      const activo = boton.classList.toggle('activo');
+      todos.forEach((b) => { if (b !== boton) b.classList.remove('activo'); });
+      return activo;
+    }
+    todos.find((b) => b.dataset.gHab === FULL_HOUSE).classList.remove('activo');
+    return boton.classList.toggle('activo');
+  }
+  const habitacionesElegidas = () => [...document.querySelectorAll('[data-g-hab].activo')].map((b) => b.dataset.gHab);
+
+  // Tras una operación de gerencia se recarga el mes completo (historial y resumen frescos) y se reabre la hoja.
+  async function recargarYAbrir(id) {
+    await cargar();
+    if (reservas.some((x) => x.id === id)) abrirDetalle(id);
+  }
+
+  async function guardarEdicion(r) {
+    const error = $('g-error');
+    ocultarError(error);
+    const cambios = {
+      huesped: $('g-huesped').value.trim(), telefono: $('g-telefono').value.trim(),
+      entrada: $('g-entrada').value, salida: $('g-salida').value, habitaciones: habitacionesElegidas(),
+      personas: Number($('g-personas').value) || 0, notas: $('g-notas').value.trim(),
+    };
+    const valor = parsearCOP($('g-valor').value);
+    if (valor > 0) cambios.valorTotal = valor;
+    const boton = $('g-guardar');
+    boton.disabled = true;
+    boton.textContent = 'Guardando…';
+    try {
+      await api('/api/reservas', { method: 'PATCH', body: { id: r.id, cambios }, gerencia: true });
+      await recargarYAbrir(r.id);
+      mostrarAviso('Reserva actualizada.');
+    } catch (e) {
+      if (!manejarErrorGerencia(e, r)) { mostrarError(error, e.message); boton.disabled = false; boton.textContent = 'Guardar cambios'; }
+    }
+  }
+
+  async function cancelarReserva(r) {
+    const error = $('g-cancel-error');
+    ocultarError(error);
+    const motivo = $('g-motivo').value.trim();
+    if (!motivo) { mostrarError(error, 'Indica el motivo de la cancelación.'); return; }
+    if (!confirm(`¿Cancelar la reserva de ${r.huesped}? Saldrá del calendario (queda guardada en Airtable con su historial).`)) return;
+    const boton = $('g-confirmar-cancelar');
+    boton.disabled = true;
+    try {
+      await api('/api/reservas', { method: 'PATCH', body: { id: r.id, cancelar: { motivo } }, gerencia: true });
+      cerrarHoja();
+      await cargar();
+      mostrarAviso(`Reserva de ${r.huesped} cancelada.`);
+    } catch (e) {
+      if (!manejarErrorGerencia(e, r)) { mostrarError(error, e.message); boton.disabled = false; }
+    }
+  }
+
+  function mostrarFormCorregir(r, pagoId) {
+    const p = r.pagos.find((x) => x.id === pagoId);
+    if (!p) return;
+    $(`pago-form-${pagoId}`).innerHTML = `<form class="form-abono" id="form-corregir-${pagoId}">
+      <div class="fila-2">
+        <div class="campo"><label for="c-monto-${pagoId}">Monto</label><input class="entrada" id="c-monto-${pagoId}" inputmode="numeric" value="${formatearCOP(p.monto)}"></div>
+        <div class="campo"><label for="c-fecha-${pagoId}">Fecha</label><input class="entrada" type="date" id="c-fecha-${pagoId}" value="${p.fecha ?? hoy}"></div>
+      </div>
+      <div class="campo"><span class="etiqueta">Medio</span><div class="chips chips--medios">${chipsMedios(pagoId, p.medio)}</div></div>
+      <div class="campo"><label for="c-nota-${pagoId}">Nota</label><input class="entrada" id="c-nota-${pagoId}" value="${escapar(p.nota)}"></div>
+      <div class="error" id="c-error-${pagoId}" role="alert"></div>
+      <button type="submit" class="boton boton--chico">Guardar corrección</button>
+    </form>`;
+    formatoCOPEnVivo($(`c-monto-${pagoId}`));
+    conectarChipsMedio(pagoId);
+    $(`form-corregir-${pagoId}`).addEventListener('submit', (ev) => { ev.preventDefault(); corregirPago(r, p); });
+  }
+
+  async function corregirPago(r, p) {
+    const error = $(`c-error-${p.id}`);
+    ocultarError(error);
+    const cambios = {
+      monto: parsearCOP($(`c-monto-${p.id}`).value), fecha: $(`c-fecha-${p.id}`).value || p.fecha,
+      medio: medioElegido(p.id), nota: $(`c-nota-${p.id}`).value.trim(),
+    };
+    if (cambios.monto <= 0) { mostrarError(error, 'Escribe el monto del abono.'); return; }
+    if (!cambios.medio) { mostrarError(error, 'Elige el medio de pago.'); return; }
+    try {
+      await api('/api/pagos', { method: 'PATCH', body: { id: p.id, cambios }, gerencia: true });
+      await recargarYAbrir(r.id);
+      mostrarAviso('Abono corregido.');
+    } catch (e) {
+      if (!manejarErrorGerencia(e, r)) mostrarError(error, e.message);
+    }
+  }
+
+  function mostrarFormAnular(r, pagoId) {
+    const p = r.pagos.find((x) => x.id === pagoId);
+    if (!p) return;
+    $(`pago-form-${pagoId}`).innerHTML = `<form class="form-abono" id="form-anular-${pagoId}">
+      <div class="campo"><label for="a-motivo-${pagoId}">Motivo de la anulación</label><input class="entrada" id="a-motivo-${pagoId}" placeholder="Ej.: se registró dos veces"></div>
+      <div class="error" id="a-error-${pagoId}" role="alert"></div>
+      <button type="submit" class="boton boton--rojo boton--chico">Confirmar anulación</button>
+    </form>`;
+    $(`form-anular-${pagoId}`).addEventListener('submit', (ev) => { ev.preventDefault(); anularPago(r, p); });
+    $(`a-motivo-${pagoId}`).focus();
+  }
+
+  async function anularPago(r, p) {
+    const error = $(`a-error-${p.id}`);
+    ocultarError(error);
+    const motivo = $(`a-motivo-${p.id}`).value.trim();
+    if (!motivo) { mostrarError(error, 'Indica el motivo de la anulación.'); return; }
+    if (!confirm(`¿Anular el abono de ${formatearCOP(p.monto)}? Quedará en $ 0 con el motivo.`)) return;
+    try {
+      await api('/api/pagos', { method: 'PATCH', body: { id: p.id, anular: { motivo } }, gerencia: true });
+      await recargarYAbrir(r.id);
+      mostrarAviso('Abono anulado.');
+    } catch (e) {
+      if (!manejarErrorGerencia(e, r)) mostrarError(error, e.message);
+    }
   }
 
   async function registrarAbono(r) {
     const error = $('abono-error');
     ocultarError(error);
     const monto = parsearCOP($('abono-monto').value);
-    const medio = $('form-abono').querySelector('[data-medio].activo')?.dataset.medio;
+    const medio = medioElegido('nuevo');
     const fecha = $('abono-fecha').value || hoy;
     const nota = $('abono-nota').value.trim();
     if (monto <= 0) { mostrarError(error, 'Escribe el monto del abono.'); return; }
