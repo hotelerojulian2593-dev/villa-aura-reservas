@@ -14,3 +14,13 @@ export function crearRes() {
     json(cuerpo) { this.body = cuerpo; return this; },
   };
 }
+
+const compacta = (iso) => iso.replace(/-/g, '');
+// Calendario de Airbnb simulado (lo usan los tests de sincronización y de /api/sincronizar).
+export function icsDe(eventos) {
+  const cuerpo = eventos.map((e) => [
+    'BEGIN:VEVENT', `DTSTART;VALUE=DATE:${compacta(e.inicio)}`, `DTEND;VALUE=DATE:${compacta(e.fin)}`, `UID:${e.uid}`,
+    `SUMMARY:${e.resumen ?? 'Reserved'}`, ...(e.descripcion ? [`DESCRIPTION:${e.descripcion}`] : []), 'END:VEVENT',
+  ].join('\r\n'));
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Airbnb Inc//Hosting Calendar 0.8.8//EN', ...cuerpo, 'END:VCALENDAR', ''].join('\r\n');
+}
