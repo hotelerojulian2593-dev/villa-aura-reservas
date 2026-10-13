@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Villa Aura — Nueva reserva</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    .exito { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .exito__icono { font-size: 56px; margin-bottom: 12px; }
+    .exito h2 { font-size: 20px; margin-bottom: 8px; }
+    .exito p { font-size: 13px; color: var(--gris); line-height: 1.7; margin-bottom: 20px; }
+    .exito .boton { max-width: 320px; }
+  </style>
+</head>
+<body>
+
+<header class="encabezado">
+  <div class="encabezado__fila">
+    <div>
+      <div class="encabezado__tag">Nueva reserva</div>
+      <h1>VILLA AURA</h1>
+      <p>Agua de Dios, Cundinamarca</p>
+    </div>
+    <a class="boton boton--chico" href="/calendario">Calendario</a>
+  </div>
+</header>
+
+<div id="pin"></div>
+
+<main id="formulario" class="contenedor oculto">
+  <div class="campo">
+    <label for="huesped">Nombre del huésped <span class="req">*</span></label>
+    <input class="entrada" type="text" id="huesped" placeholder="Nombre completo" autocomplete="name">
+  </div>
+
+  <div class="campo">
+    <label for="telefono">WhatsApp / Teléfono <span class="req">*</span></label>
+    <input class="entrada" type="tel" id="telefono" placeholder="310 000 0000" autocomplete="tel">
+  </div>
+
+  <div class="campo">
+    <span class="etiqueta">Fechas de la reserva <span class="req">*</span></span>
+    <div class="fila-2">
+      <div><input class="entrada" type="date" id="fecha-entrada" aria-label="Llegada"><div class="sub">Llegada</div></div>
+      <div><input class="entrada" type="date" id="fecha-salida" aria-label="Salida"><div class="sub">Salida</div></div>
+    </div>
+  </div>
+
+  <div class="campo">
+    <span class="etiqueta">Habitación(es) <span class="req">*</span></span>
+    <div class="chips">
+      <button type="button" class="chip" data-hab="La Rosaura"><strong>La Rosaura</strong><small>7 personas · AC</small></button>
+      <button type="button" class="chip" data-hab="La Yaneth"><strong>La Yaneth</strong><small>5 personas · AC</small></button>
+      <button type="button" class="chip" data-hab="La Clara"><strong>La Clara</strong><small>5-6 personas · AC</small></button>
+      <button type="button" class="chip" data-hab="La Luis"><strong>La Luis</strong><small>5-6 personas · AC</small></button>
+      <button type="button" class="chip" data-hab="La Elsa"><strong>La Elsa</strong><small>5-6 personas · AC</small></button>
+      <button type="button" class="chip chip--ancho" data-hab="FULL HOUSE"><strong>🏠 Full House</strong><small>Todas las habitaciones</small></button>
+    </div>
+  </div>
+
+  <div class="fila-2">
+    <div class="campo">
+      <label for="personas">Personas <span class="req">*</span></label>
+      <input class="entrada" type="number" id="personas" placeholder="0" min="1" max="60" inputmode="numeric">
+    </div>
+    <div class="campo">
+      <label for="valor-total">Valor total acordado <span class="req">*</span></label>
+      <input class="entrada" type="text" id="valor-total" placeholder="$ 0" inputmode="numeric" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="campo">
+    <label for="abono">Abono inicial recibido</label>
+    <input class="entrada" type="text" id="abono" placeholder="$ 0 (si aún no ha pagado, déjalo vacío)" inputmode="numeric" autocomplete="off">
+  </div>
+
+  <div class="campo oculto" id="campo-medio">
+    <span class="etiqueta">Medio de pago del abono <span class="req">*</span></span>
+    <div class="chips chips--medios" id="medios"></div>
+  </div>
+
+  <div class="campo">
+    <label for="notas">Notas adicionales</label>
+    <textarea class="entrada" id="notas" rows="2" placeholder="Extras, solicitudes especiales…"></textarea>
+  </div>
+
+  <div class="error" id="error" role="alert"></div>
+  <button class="boton" id="guardar" type="button">Guardar reserva</button>
+</main>
+
+<section id="exito" class="contenedor exito oculto">
+  <div class="exito__icono">✅</div>
+  <h2>¡Reserva registrada!</h2>
+  <p id="exito-detalle"></p>
+  <a class="boton" href="/calendario">Ver calendario</a>
+  <button class="boton boton--secundario" id="nueva" type="button">+ Nueva reserva</button>
+</section>
+
+<footer class="pie">Villa Aura · Sistema de reservas · Marketing Hotelero</footer>
+
+<script type="module">
+  import { api, asegurarPin, escapar, mostrarError, ocultarError, formatoCOPEnVivo, ErrorApi } from '/js/app.js';
+  import { hoyBogota, sumarDias } from '/js/fechas.js';
+  import { parsearCOP, formatearCOP } from '/js/dinero.js';
+  import { FULL_HOUSE, buscarConflicto } from '/js/disponibilidad.js';
+
+  const MEDIOS = ['Nequi', 'Bancolombia', 'Daviplata', 'Efectivo', 'Otro'];
+  const $ = (id) => document.getElementById(id);
+  let habitaciones = [];
+  let medio = null;
+
+  function iniciar() {
+    $('formulario').classList.remove('oculto');
+    const hoy = hoyBogota();
+    $('fecha-entrada').min = hoy;
+    $('fecha-salida').min = sumarDias(hoy, 1);
+    $('fecha-entrada').addEventListener('change', () => {
+      const entrada = $('fecha-entrada').value || hoy;
+      $('fecha-salida').min = sumarDias(entrada, 1);
+      if ($('fecha-salida').value && $('fecha-salida').value <= entrada) $('fecha-salida').value = '';
+    });
+    formatoCOPEnVivo($('valor-total'));
+    formatoCOPEnVivo($('abono'));
+    $('abono').addEventListener('input', () => {
+      $('campo-medio').classList.toggle('oculto', parsearCOP($('abono').value) === 0);
+    });
+    document.querySelectorAll('[data-hab]').forEach((b) => b.addEventListener('click', () => alternarHabitacion(b)));
+    $('medios').innerHTML = MEDIOS.map((m) => `<button type="button" class="chip chip--medio" data-medio="${m}">${m}</button>`).join('');
+    document.querySelectorAll('[data-medio]').forEach((b) => b.addEventListener('click', () => elegirMedio(b)));
+    $('guardar').addEventListener('click', guardar);
+    $('nueva').addEventListener('click', nuevaReserva);
+  }
+
+  function alternarHabitacion(boton) {
+    const hab = boton.dataset.hab;
+    const todos = [...document.querySelectorAll('[data-hab]')];
+    if (hab === FULL_HOUSE) {
+      const activo = boton.classList.toggle('activo');
+      todos.forEach((b) => { if (b !== boton) b.classList.remove('activo'); });
+      habitaciones = activo ? [FULL_HOUSE] : [];
+      return;
+    }
+    todos.find((b) => b.dataset.hab === FULL_HOUSE).classList.remove('activo');
+    boton.classList.toggle('activo');
+    habitaciones = todos.filter((b) => b.classList.contains('activo')).map((b) => b.dataset.hab);
+  }
+
+  function elegirMedio(boton) {
+    medio = boton.dataset.medio;
+    document.querySelectorAll('[data-medio]').forEach((b) => b.classList.toggle('activo', b === boton));
+  }
+
+  function leer() {
+    return {
+      huesped: $('huesped').value.trim(),
+      telefono: $('telefono').value.trim(),
+      entrada: $('fecha-entrada').value,
+      salida: $('fecha-salida').value,
+      habitaciones,
+      personas: Number($('personas').value) || 0,
+      valorTotal: parsearCOP($('valor-total').value),
+      abonoMonto: parsearCOP($('abono').value),
+      notas: $('notas').value.trim(),
+    };
+  }
+
+  function validar(d) {
+    if (!d.huesped) return 'El nombre del huésped es requerido.';
+    if (!d.telefono) return 'El teléfono es requerido.';
+    if (!d.entrada) return 'La fecha de llegada es requerida.';
+    if (!d.salida) return 'La fecha de salida es requerida.';
+    if (d.salida <= d.entrada) return 'La fecha de salida debe ser posterior a la llegada.';
+    if (!d.habitaciones.length) return 'Selecciona al menos una habitación.';
+    if (d.personas < 1) return 'El número de personas es requerido.';
+    if (d.valorTotal <= 0) return 'El valor total acordado es requerido.';
+    if (d.abonoMonto > 0 && !medio) return 'Indica el medio de pago del abono.';
+    return null;
+  }
+
+  async function guardar() {
+    const error = $('error');
+    ocultarError(error);
+    const d = leer();
+    const falla = validar(d);
+    if (falla) { mostrarError(error, falla); return; }
+    if (d.abonoMonto > d.valorTotal
+      && !confirm(`El abono (${formatearCOP(d.abonoMonto)}) supera el valor total (${formatearCOP(d.valorTotal)}). ¿Guardar así?`)) return;
+
+    const boton = $('guardar');
+    boton.disabled = true;
+    boton.textContent = 'Guardando…';
+    try {
+      // Validación previa en el celular; el servidor vuelve a validar.
+      const { reservas } = await api(`/api/reservas?desde=${d.entrada}&hasta=${d.salida}`);
+      const conflicto = buscarConflicto({ entrada: d.entrada, salida: d.salida, habitaciones: d.habitaciones }, reservas);
+      if (conflicto) {
+        throw new ErrorApi(`⚠️ ${conflicto.habitaciones.join(', ')} ya está reservada del ${conflicto.entrada} al ${conflicto.salida} (${conflicto.huesped}). Verifica las fechas.`, 409);
+      }
+      const cuerpo = {
+        huesped: d.huesped, telefono: d.telefono, entrada: d.entrada, salida: d.salida,
+        habitaciones: d.habitaciones, personas: d.personas, valorTotal: d.valorTotal, notas: d.notas,
+      };
+      if (d.abonoMonto > 0) cuerpo.abono = { monto: d.abonoMonto, medio };
+      const respuesta = await api('/api/reservas', { method: 'POST', body: cuerpo });
+      mostrarExito(d, respuesta);
+    } catch (e) {
+      if (e.status === 401) {
+        $('formulario').classList.add('oculto');
+        asegurarPin({ raiz: $('pin'), alListo: () => $('formulario').classList.remove('oculto') });
+      } else {
+        mostrarError(error, e.message);
+      }
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar reserva';
+    }
+  }
+
+  function mostrarExito(d, respuesta) {
+    $('formulario').classList.add('oculto');
+    const abono = d.abonoMonto > 0 && respuesta.abonoRegistrado ? `<br>Abono: ${formatearCOP(d.abonoMonto)} (${escapar(medio)})` : '';
+    const aviso = respuesta.advertencia ? `<div class="aviso">${escapar(respuesta.advertencia)}</div>` : '';
+    $('exito-detalle').innerHTML = `<strong>${escapar(d.huesped)}</strong><br>${escapar(d.habitaciones.join(' · '))}<br>`
+      + `${d.entrada} → ${d.salida}<br>${d.personas} personas<br>Valor total: ${formatearCOP(d.valorTotal)}${abono}${aviso}`;
+    $('exito').classList.remove('oculto');
+    window.scrollTo(0, 0);
+  }
+
+  function nuevaReserva() {
+    ['huesped', 'telefono', 'fecha-entrada', 'fecha-salida', 'personas', 'valor-total', 'abono', 'notas'].forEach((id) => { $(id).value = ''; });
+    habitaciones = [];
+    medio = null;
+    document.querySelectorAll('.chip').forEach((b) => b.classList.remove('activo'));
+    $('campo-medio').classList.add('oculto');
+    $('exito').classList.add('oculto');
+    $('formulario').classList.remove('oculto');
+    ocultarError($('error'));
+    window.scrollTo(0, 0);
+  }
+
+  asegurarPin({ raiz: $('pin'), alListo: iniciar });
+</script>
+</body>
+</html>
